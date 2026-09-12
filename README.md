@@ -64,7 +64,7 @@ curl -X POST http://127.0.0.1:8000/api/replan \
 - `backend/data/`：B 管行程、候選、交通 fixture；A 管偏好種子、天氣 fixture 與 runtime。
 - `backend/tests/`：API、天氣 context 與 runtime JSON 測試。
 
-`weather.py` 已從 `replanner/` 移至 `agent/`；取得天氣由 A 負責，天氣如何影響行程由 B 負責。完整責任邊界與儲存決策見 [ADR 001](docs/decisions/001-backend-boundaries-runtime-json.md)。
+`weather.py` 已從 `replanner/` 移至 `agent/`；取得天氣由 A 負責，天氣如何影響行程由 B 負責。完整責任邊界與儲存決策見 [ADR 004](docs/decisions/004-backend-boundaries-runtime-json.md)。
 
 從 main 分出 `feat/frontend`、`feat/agent`、`feat/replanner`，小步合併；共用 API 改動先同步規格。不要提交金鑰、虛擬環境或 runtime 資料。
 

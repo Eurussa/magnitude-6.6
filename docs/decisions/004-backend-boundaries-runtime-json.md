@@ -1,8 +1,10 @@
-# 001 Backend 分工與 runtime JSON
+# 004 Backend 分工與 runtime JSON
 
 ## Status
 
 Accepted — 2026-09-12
+
+取代 [ADR 001](001-technology-stack.md) 中的 SQLite 儲存選項，以及 [ADR 002](002-planning-boundaries.md) 的天氣 ownership／初始化進度敘述；其餘技術棧與排程原則維持有效。[ADR 003](003-replan-selection-contract.md) 的選擇與學習契約仍為 Proposed，已完成的 context／儲存基礎以本紀錄及現行 schema 為準。
 
 ## Context
 
