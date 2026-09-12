@@ -8,6 +8,7 @@ import tempfile
 from contextlib import suppress
 from pathlib import Path
 from threading import RLock
+from collections.abc import Callable
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -62,6 +63,22 @@ class RuntimeStore:
         with self._lock:
             self._read()  # Refuse to overwrite a corrupt or unsupported state.
             self._write(RuntimeState(trip=trip, preferences=preferences))
+
+    def update_state(
+        self, update: Callable[[RuntimeState], RuntimeState],
+    ) -> RuntimeState:
+        """Atomically apply one validated state transition under the process lock."""
+        with self._lock:
+            current = self._read()
+            candidate = update(current.model_copy(deep=True))
+            try:
+                validated = RuntimeState.model_validate(candidate.model_dump())
+            except (AttributeError, ValidationError) as exc:
+                raise RuntimeStorageError(
+                    "Runtime JSON 更新結果格式不正確；既有資料未變更。",
+                ) from exc
+            self._write(validated)
+            return validated.model_copy(deep=True)
 
     def _read(self) -> RuntimeState:
         try:

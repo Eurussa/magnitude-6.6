@@ -78,8 +78,8 @@ async def replan(
         recommended_plan_id=None,
         preference_insight=None,
         warnings=context.weather.warnings + [
-            "Placeholder：尚未呼叫事件解析或重排 LLM；"
-            "已取得天氣與偏好 context，"
+            "Placeholder：事件已由離線 parser 解析並取得天氣與偏好 context；"
+            "尚未接通重排實作，"
             "但尚未套用於排程、評分或可行性驗證。",
         ],
     )
