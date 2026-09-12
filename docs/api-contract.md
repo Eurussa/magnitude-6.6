@@ -112,7 +112,7 @@ class Replanner(Protocol):
     async def generate_plans(self, context: ReplanContext, /) -> PlanningResult: ...
 ```
 
-此介面定義於 `backend/contracts.py`。目前 `candidate_plans(...)` 只供未注入 B 實例時產生安全 placeholder；A 已在 `main.py` 建立 dependency boundary，取得 B 實例後呼叫 `Replanner.generate_plans`，不在 main 內加入排程邏輯。
+此介面與 `ReplannerUnavailableError` 定義於 `backend/contracts.py`。B 用盡重試／fallback 後若仍無法提供方案，應丟出此例外；A 會回傳不含 provider 細節的 503 `ErrorResponse`。目前 `candidate_plans(...)` 只供未注入 B 實例時產生安全 placeholder；A 已在 `main.py` 建立 dependency boundary，取得 B 實例後呼叫 `Replanner.generate_plans`，不在 main 內加入排程邏輯。
 
 ## Replan response 與 snapshot
 

@@ -8,7 +8,7 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from .agent.context import build_context
+from .agent.context import build_context_result
 from .agent.explanation import explain_plan
 from .agent.preference import get_preferences, preference_insight
 from .agent.runtime import RuntimeStorageError, RuntimeStore
@@ -17,7 +17,8 @@ from .agent.selection import (
     SelectionNotFoundError,
     apply_selection,
 )
-from .contracts import Replanner
+from .contracts import Replanner, ReplannerUnavailableError
+from .llm import LLMProviderError
 from .models import (
     ErrorResponse,
     HealthResponse,
@@ -65,6 +66,12 @@ def health() -> HealthResponse:
 STORAGE_ERROR_RESPONSE = {
     503: {"model": ErrorResponse, "description": "Runtime storage unavailable"},
 }
+REPLAN_ERROR_RESPONSE = {
+    503: {
+        "model": ErrorResponse,
+        "description": "Runtime storage or replanner unavailable",
+    },
+}
 
 
 @app.get("/api/trip", response_model=Trip, responses=STORAGE_ERROR_RESPONSE)
@@ -77,15 +84,22 @@ def preferences(store: RuntimeStore = Depends(get_store)) -> Preference:
     return get_preferences(store)
 
 
-@app.post("/api/replan", response_model=ReplanResponse, responses=STORAGE_ERROR_RESPONSE)
+@app.post("/api/replan", response_model=ReplanResponse, responses=REPLAN_ERROR_RESPONSE)
 async def replan(
     request: ReplanRequest,
     store: RuntimeStore = Depends(get_store),
     replanner: Replanner | None = Depends(get_replanner),
 ) -> ReplanResponse:
-    context = await build_context(request, store)
+    built = await build_context_result(request, store)
+    context = built.context
     if replanner is not None:
-        result = await replanner.generate_plans(context)
+        try:
+            result = await replanner.generate_plans(context)
+        except (LLMProviderError, ReplannerUnavailableError) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="重排行程服務暫時無法使用，請稍後重試。",
+            ) from exc
         plans = [explain_plan(plan) for plan in result.plans]
         replan_id = uuid4()
         snapshot = ReplanSnapshot(
@@ -115,7 +129,7 @@ async def replan(
                 context.preferences,
                 recommended.strategy if recommended is not None else None,
             ),
-            warnings=context.weather.warnings + result.warnings,
+            warnings=list(built.warnings) + context.weather.warnings + result.warnings,
         )
 
     plans = candidate_plans(context.trip, event=context.event, weather=context.weather,
@@ -128,9 +142,8 @@ async def replan(
         plans=[explain_plan(plan) for plan in plans],
         recommended_plan_id=None,
         preference_insight=None,
-        warnings=context.weather.warnings + [
-            "Placeholder：事件已由離線 parser 解析並取得天氣與偏好 context；"
-            "尚未接通重排實作，"
+        warnings=list(built.warnings) + context.weather.warnings + [
+            "Placeholder：事件、天氣與偏好 context 已完成組裝；尚未接通重排實作，"
             "但尚未套用於排程、評分或可行性驗證。",
         ],
     )

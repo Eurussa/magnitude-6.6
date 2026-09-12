@@ -2,6 +2,7 @@
 import json
 import logging
 import re
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 
 from pydantic import ValidationError
@@ -11,6 +12,12 @@ from ..models import Event, Trip
 from .prompts import SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class ParsedEvent:
+    event: Event
+    warnings: tuple[str, ...] = ()
 
 CHINESE_NUMBERS = {
     "零": 0,
@@ -53,7 +60,11 @@ def _mentioned_item_ids(message: str, trip: Trip) -> list[str]:
     return item_ids
 
 
-def _mentioned_dates(message: str, trip: Trip, now: datetime) -> list[date]:
+def _mentioned_dates(
+    message: str,
+    trip: Trip,
+    now: datetime,
+) -> tuple[list[date], bool]:
     dates: set[date] = set()
     local_today = now.date()
     normalized = message.casefold()
@@ -74,7 +85,10 @@ def _mentioned_dates(message: str, trip: Trip, now: datetime) -> list[date]:
             dates.add(date(local_today.year, int(month), int(day)))
         except ValueError:
             continue
-    return sorted(day for day in dates if trip.start_date <= day <= trip.end_date)
+    return (
+        sorted(day for day in dates if trip.start_date <= day <= trip.end_date),
+        bool(dates),
+    )
 
 
 def parse_event_locally(message: str, *, trip: Trip, now: datetime) -> Event:
@@ -111,8 +125,8 @@ def parse_event_locally(message: str, *, trip: Trip, now: datetime) -> Event:
             event_type = "closure"
 
     item_ids = _mentioned_item_ids(message, trip)
-    affected_dates = _mentioned_dates(message, trip, now)
-    if not affected_dates and event_type != "unknown":
+    affected_dates, date_was_mentioned = _mentioned_dates(message, trip, now)
+    if not affected_dates and not date_was_mentioned and event_type != "unknown":
         item_dates = {
             item.scheduled_date for item in trip.items if item.id in item_ids
         }
@@ -165,11 +179,19 @@ def _validate_event_references(event: Event, trip: Trip, message: str) -> Event:
     })
 
 
-async def parse_event(message: str, *, trip: Trip, now: datetime) -> Event:
-    """Use structured output when configured, otherwise return the local fallback."""
+async def parse_event_with_warnings(
+    message: str,
+    *,
+    trip: Trip,
+    now: datetime,
+) -> ParsedEvent:
+    """Parse an event and report whether a local fallback was used."""
     fallback = parse_event_locally(message, trip=trip, now=now)
     if not llm_is_configured():
-        return fallback
+        return ParsedEvent(
+            event=fallback,
+            warnings=("事件使用本機 parser：LLM 尚未設定。",),
+        )
     prompt = json.dumps(
         {"message": message, "context": _event_context(trip, now)},
         ensure_ascii=False,
@@ -183,8 +205,16 @@ async def parse_event(message: str, *, trip: Trip, now: datetime) -> Event:
             user_prompt=prompt,
         )
         event = Event.model_validate_json(content)
-        return _validate_event_references(event, trip, message)
+        return ParsedEvent(event=_validate_event_references(event, trip, message))
     except (LLMProviderError, ValidationError, ValueError):
         # Never log the prompt, response, headers, or API key.
         logger.warning("LLM event parsing unavailable; using local fallback")
-        return fallback
+        return ParsedEvent(
+            event=fallback,
+            warnings=("事件 LLM 無法使用或輸出無效，已使用本機 parser。",),
+        )
+
+
+async def parse_event(message: str, *, trip: Trip, now: datetime) -> Event:
+    """Return the parsed Event for callers that do not need fallback metadata."""
+    return (await parse_event_with_warnings(message, trip=trip, now=now)).event

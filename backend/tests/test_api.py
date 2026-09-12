@@ -9,6 +9,8 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from backend.agent.runtime import RuntimeStore
+from backend.contracts import ReplannerUnavailableError
+from backend.llm import LLMProviderError
 from backend.main import app, get_replanner, get_store
 from backend.models import PlanningResult, ReplanContext
 from backend.replanner.planner import candidate_plans
@@ -51,6 +53,11 @@ class InfeasibleReplanner:
             recommended_plan_id=None,
             warnings=["沒有可行方案"],
         )
+
+
+class UnavailableReplanner:
+    async def generate_plans(self, context: ReplanContext) -> PlanningResult:
+        raise ReplannerUnavailableError("provider-secret-detail")
 
 
 class ApiTest(unittest.TestCase):
@@ -172,6 +179,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(data["weather"]["start_date"], "2026-09-12")
         self.assertEqual(data["weather"]["end_date"], "2026-09-14")
         self.assertEqual(data["preferences"]["selection_count"], 0)
+        self.assertTrue(any("本機 parser" in warning for warning in data["warnings"]))
         original = self.client.get("/api/trip").json()["items"]
         for plan in data["plans"]:
             self.assertEqual([x for x in plan["items"] if x["booking"]],
@@ -201,7 +209,43 @@ class ApiTest(unittest.TestCase):
             "affected_dates": ["2026-09-14"],
             "summary": "後天迪士尼會下雨",
         })
+        self.assertFalse(any(
+            "本機 parser" in warning for warning in response.json()["warnings"]
+        ))
         completion.assert_awaited_once()
+
+    def test_replan_marks_event_provider_fallback(self):
+        with patch.dict(os.environ, {
+            "LLM_API_KEY": "test-key", "LLM_MODEL": "test-model",
+        }), patch(
+            "backend.agent.parser.structured_completion",
+            AsyncMock(side_effect=LLMProviderError("provider-secret-detail")),
+        ):
+            response = self.client.post("/api/replan", json={
+                "message": "睡過頭兩小時",
+                "now": "2026-09-12T09:00:00+09:00",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any(
+            "本機 parser" in warning for warning in response.json()["warnings"]
+        ))
+        self.assertNotIn("provider-secret-detail", response.text)
+
+    def test_replanner_unavailable_returns_sanitized_503(self):
+        app.dependency_overrides[get_replanner] = lambda: UnavailableReplanner()
+
+        response = self.client.post("/api/replan", json={
+            "message": "睡過頭兩小時",
+            "now": "2026-09-12T09:00:00+09:00",
+        })
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {
+            "detail": "重排行程服務暫時無法使用，請稍後重試。",
+        })
+        self.assertNotIn("provider-secret-detail", response.text)
+        self.assertEqual(self.store.load_state().replan_snapshots, {})
 
     def test_invalid_request(self):
         for payload in ({"message": ""}, {"message": "   "},

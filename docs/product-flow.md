@@ -47,7 +47,7 @@ Runtime JSON 會保存目前行程、偏好、snapshots 與冪等 selection resp
 | 空白、過長訊息、未知行程或未帶 offset 的 now | 目前 API 回傳 422；message 必須 1–2000 字且不可全空白，trip_id 僅接受 tokyo-demo |
 | 行程載入失敗、網路中斷或 API 失敗 | 顯示 error，允許重試；不得將失敗呈現為已套用成功 |
 | runtime JSON 損壞或讀寫失敗 | 目前 API 回傳 503，不以種子靜默覆蓋已保存資料 |
-| 事件或 planning LLM timeout／非法 JSON | 驗證失敗後重試、回傳可辨識且明確標示的 fallback，或供應商不可用時回 503；不直接使用未驗證內容 |
+| 事件或 planning LLM timeout／非法 JSON | 事件解析改用本機 parser 時加入 response warning；B 用盡重試／fallback 後丟出 `ReplannerUnavailableError`，A 回不含 provider 細節的 503；不直接使用未驗證內容 |
 | 多日天氣 timeout、不完整或不可用 | 目前以 `weather.source` 與 warnings 明示 `fixture` 或 `unavailable`；date range 必須涵蓋要求的每個日期，不能冒充即時資料，也不能將未知天氣當晴天 |
 | 方案仍是 placeholder | 顯示警告，不開放套用 |
 | 無可行替代方案或預約限制無解 | 目標為明示不可行並禁止套用；不可為增加景點數解除預約鎖 |

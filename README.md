@@ -33,7 +33,7 @@ pnpm dev
 開啟 http://localhost:5173；API 文件 http://127.0.0.1:8000/docs。
 Vite 將 `/api` 轉送至 8000；production build 僅產生靜態檔，正式 hosting 需另外配置 SPA fallback 與 `/api` reverse proxy。
 
-`.env` 放在 repo 根目錄，由後端明確載入。設定 `LLM_API_KEY` 與 `LLM_MODEL` 後，A 會用 `LLM_BASE_URL` 的 Chat Completions strict JSON Schema 解析事件；未設定、逾時、拒絕、非法 JSON 或不合法 item/date reference 時會使用本機 parser。`LLM_TIMEOUT_SECONDS` 預設 8 秒；key 僅供後端使用，勿放入 VITE\_ 變數。送往事件 parser 的 context 僅包含訊息、行程日期／時區及活動 ID／名稱／日期，不包含座標、預約、偏好或 runtime 歷史。方案說明由已驗證 facts deterministic 產生，不額外呼叫 LLM。`WEATHER_MODE=mock` 使用涵蓋 Trip 未來日期區間、明確標示來源的天氣 fixture；`live` 呼叫 Open-Meteo date range 並在失敗時標示 fallback。天氣已包含在 `ReplanContext`；注入 B 的 replanner 後才會產生可選 ready 方案。
+`.env` 放在 repo 根目錄，由後端明確載入。設定 `LLM_API_KEY` 與 `LLM_MODEL` 後，A 會用 `LLM_BASE_URL` 的 Chat Completions strict JSON Schema 解析事件；未設定、逾時、拒絕、非法 JSON 或不合法 item/date reference 時會使用本機 parser 並加入 response warning。`LLM_TIMEOUT_SECONDS` 預設 8 秒；key 僅供後端使用，勿放入 VITE\_ 變數。送往事件 parser 的 context 僅包含訊息、行程日期／時區及活動 ID／名稱／日期，不包含座標、預約、偏好或 runtime 歷史。推薦說明依 main 規格使用 LLM，現有 deterministic 實作保留作 fallback。`WEATHER_MODE=mock` 使用涵蓋 Trip 未來日期區間、明確標示來源的天氣 fixture；`live` 呼叫 Open-Meteo date range 並在失敗時標示 fallback。天氣已包含在 `ReplanContext`；注入 B 的 replanner 後才會產生可選 ready 方案。
 
 後端先使用 JSON，不使用 DB。唯讀種子在 `backend/data/trip.json`、`preferences.json`；首次讀取時建立 `backend/data/runtime/state.json`，schema version 2 包含多日 Trip、偏好、replan snapshots 與 selection results，後續讀寫都透過 A 的 RuntimeStore。原子 replace 與單程序鎖保護更新；僅支援單一 worker，不要使用 `--workers` 啟動多程序。runtime 已忽略版控，資料損壞或舊 schema 不會被靜默重置。升級後若仍有開發用 version 1 state，先停止服務並移除自己的 `state.json`，下次讀取由多日種子重建。
 

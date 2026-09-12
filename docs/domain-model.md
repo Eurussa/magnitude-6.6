@@ -82,7 +82,7 @@ A 的 `agent/context.py` 從同一份 runtime state 讀取 multi-day Trip 與 Pr
 | features | preserve_booking、maximize_attractions、relaxed 三種特徵，各 0–1，供偏好評分 |
 | explanation | A 根據已驗證方案事實產生的可讀說明；B 可先留空 |
 
-原本的 Impact 概念由 `changes`、交通／費用增量與 booking_warnings 表達，目前沒有獨立 Impact model。Backend B 的 planning LLM 產生候選方案，B 再驗證並整理這些事實與 features；Backend A 的 `agent/explanation.py` 只依已驗證 facts deterministic 產生使用者可讀說明，不把方案資料另送 LLM。方案需檢查 item 日期位於 Trip 範圍、同日時間不重疊、跨日移動限制、fixture 交通時間、營業時間與最晚抵達；無效輸出應重試、fallback 或明示不可行。
+原本的 Impact 概念由 `changes`、交通／費用增量與 booking_warnings 表達，目前沒有獨立 Impact model。Backend B 的 planning LLM 產生候選方案，B 再驗證並整理這些事實與 features；Backend A 的 `agent/explanation.py` 依已驗證的必要摘要 facts 產生使用者可讀說明，失敗時使用 deterministic fallback。方案需檢查 item 日期位於 Trip 範圍、同日時間不重疊、跨日移動限制、fixture 交通時間、營業時間與最晚抵達；無效輸出應重試、fallback 或明示不可行。
 
 ### ReplanResponse / Replan snapshot
 

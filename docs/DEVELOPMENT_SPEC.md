@@ -23,7 +23,7 @@ Out of Scope：Next.js/SSR、LangGraph、CrewAI、Leaflet/OSM、Google Maps SDK�
 - 單一 FastAPI server，`agent/` 與 `replanner/` 是 Python module，不是兩個服務。
 - 使用 runtime JSON，不使用 DB。`data/trip.json` 與 `preferences.json` 是唯讀種子；首次讀取初始化 `data/runtime/state.json`（schema_version=2、multi-day trip、preferences），後續由 A 讀寫，不提交 runtime。Version 1 不自動猜測日期或靜默遷移。
 - RuntimeStore 以單程序鎖保護更新，暫存檔寫入並 fsync 後以原子 replace 取代狀態；限單一 worker。損壞或無法讀寫時明確報錯，不靜默覆蓋已保存資料。
-- LLM：透過 httpx 呼叫支援 JSON Schema structured output 的 provider；A 用於事件解析，B 用於產生 A/B/C 重排行程。共用 provider/model 設定由 A 整合，planning prompt 與規劃呼叫由 B 負責；金鑰只在後端。A 的推薦說明只依已驗證方案 facts deterministic 產生，不另送方案資料給 provider。
+- LLM：透過 httpx 呼叫支援 JSON Schema structured output 的 provider；A 用於事件解析與推薦說明，B 用於產生 A/B/C 重排行程。共用 provider/model 設定由 A 整合，planning prompt 與規劃呼叫由 B 負責；金鑰只在後端。
 - 天氣：Open-Meteo hourly precipitation_probability；取得 Trip 尚未結束的日期區間，以 Asia/Tokyo 對齊時間，失敗時顯示 fixture/fallback 標籤，不冒充即時資料。
 - Google Maps Search URL 以座標開啟地點，交通時間使用 fixture，不宣稱是即時導航。
 
@@ -41,9 +41,9 @@ React SPA :5173 -- /api proxy --> FastAPI :8000
 事件 LLM 輸出須經 `Event.model_validate_json` 及 item/date reference 檢查，planning LLM 輸出須經對應的 Pydantic schema 與方案限制驗證；timeout、格式錯誤或無效方案應重試、使用明確標示的 fixture/fallback，或回傳 503。LLM 負責產生跨日重排行程，Python 負責 orchestration、驗證及 deterministic preference scoring。預設 `WEATHER_MODE=mock` 使用涵蓋 demo 三日的天氣 fixture；`live` 呼叫 Open-Meteo date range，失敗時明示 fallback。A 的事件 structured-output adapter 與 `agent/weather.py` 已串入多日 context，但 placeholder planner 尚未呼叫 B 的 planning LLM。
 
 ## 目前交付範圍
-已實作：health/trip/preferences/replan/selections API、完整外層 Pydantic/OpenAPI schema、多日 JSON fixture、runtime JSON、多日 weather context、Frontend 既有串接與 Google Maps。Backend A 已完成事件 LLM structured output、本機多日 fallback parser、B Protocol 注入邊界、deterministic 方案說明、snapshot 保存與 selection 原子交易；仍不開放 HTTP 任意儲存或重置 endpoint。
+已實作：health/trip/preferences/replan/selections API、完整外層 Pydantic/OpenAPI schema、多日 JSON fixture、runtime JSON、多日 weather context、Frontend 既有串接與 Google Maps。Backend A 已完成事件 LLM structured output、本機多日 fallback parser與明確 warning、B Protocol／503 邊界、deterministic 方案說明 fallback、snapshot 保存與 selection 原子交易；仍不開放 HTTP 任意儲存或重置 endpoint。
 
-未注入 Backend B 實例時，Replan 回傳 `status: placeholder`，三方案沿用完整多日行程。注入符合固定 Protocol 的 B 實例後，A 會保存 snapshot 並回 ready，之後可選擇可行方案。**尚未實作的是 B 的 LLM 跨日行程重排。** 外層契約與 A 的事件解析、說明及選擇交易已完成，未實作狀態不代表欄位仍待決定。
+未注入 Backend B 實例時，Replan 回傳 `status: placeholder`，三方案沿用完整多日行程。注入符合固定 Protocol 的 B 實例後，A 會保存 snapshot 並回 ready，之後可選擇可行方案。**尚未實作的是 A 的 LLM 推薦說明與 B 的 LLM 跨日行程重排。** 外層契約及 A 的事件解析、說明 fallback、選擇交易已完成，未實作狀態不代表欄位仍待決定。
 
 ## API contract
 完整且固定的欄位、enum、nullable 規則、錯誤碼、選擇交易語意及 A/B module 介面見 [Backend API 與模組契約](api-contract.md)。即時可執行 schema 以 `/openapi.json`、互動文件 `/docs` 為準。

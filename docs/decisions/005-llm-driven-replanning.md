@@ -16,7 +16,7 @@ Accepted — 2026-09-12
 
 - Backend A 組裝已驗證的 `ReplanContext`，包含 `Trip`、`Event`、`WeatherContext`、`Preference` 與 `now`，並呼叫固定的 `await Replanner.generate_plans(context) -> PlanningResult` Protocol。A 繼續負責事件解析、天氣取得、runtime、使用者可讀推薦說明，以及共用 LLM provider/model/key 設定的整合。
 - 共用 `backend/llm.py` 透過 `httpx` 呼叫 `LLM_BASE_URL` 的 Chat Completions strict JSON Schema，model、key 與 timeout 分別由 `LLM_MODEL`、`LLM_API_KEY`、`LLM_TIMEOUT_SECONDS` 設定。A 的事件輸出再經 Pydantic 與 Trip reference 驗證；缺少設定或 provider／驗證失敗時使用本機 parser。
-- 推薦說明只組合 B 已驗證的 changes、交通／費用增量、可行性與 booking warnings，以 deterministic Python 產生，不額外將方案 facts 傳給 LLM，也不允許說明改變方案。
+- A 的推薦說明 LLM 只接收 B 已驗證方案的必要摘要 facts；輸出不得改變方案，可用性或驗證失敗時改用 deterministic Python fallback。
 - Backend B 擁有 replanner 的 planning prompt、LLM 呼叫與 planning structured-output schema。B 將完整 multi-day context 提供給 planning LLM，要求產生 A 保留預約、B 保留最多景點、C 最輕鬆三個候選方案；事件可影響多個日期，方案可整日換日並重排其他受影響日期。
 - Python 不以 heuristic 產生或決定候選行程。B 使用 Python 進行 orchestration、Pydantic 驗證、日期範圍、項目參照與重複檢查，以及同日時間、跨日移動、預約、交通／營業 fixture 等必要限制驗證；無效輸出不得直接標示為 ready。
 - planning LLM timeout、無效 JSON 或不符合限制時，B 應採有限次重試、明確標示的 planning fixture/fallback，或回傳可恢復的 provider error。測試不得呼叫真實 LLM。

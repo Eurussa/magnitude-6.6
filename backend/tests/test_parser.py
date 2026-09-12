@@ -57,7 +57,7 @@ class ParserTest(unittest.IsolatedAsyncioTestCase):
         event = await self.parse("2026-09-20 下雨")
 
         self.assertEqual(event.event_type, "weather")
-        self.assertEqual(event.affected_dates, [date(2026, 9, 12)])
+        self.assertEqual(event.affected_dates, [])
 
     async def test_unknown_text_stays_conservative(self) -> None:
         event = await self.parse("想換個行程")
@@ -131,7 +131,7 @@ class ParserTest(unittest.IsolatedAsyncioTestCase):
             event = await self.parse("2026-09-20 下雨")
 
         self.assertEqual(event.event_type, "weather")
-        self.assertEqual(event.affected_dates, [date(2026, 9, 12)])
+        self.assertEqual(event.affected_dates, [])
 
     async def test_provider_failure_uses_local_fallback(self) -> None:
         with patch.dict(os.environ, {
