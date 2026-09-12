@@ -4,9 +4,23 @@ export interface TripItem {
   booking: boolean; movable: boolean; indoor: boolean
 }
 export interface Trip { id: string; city: string; timezone: string; items: TripItem[] }
+export interface Preference {
+  user_id: 'demo-user'
+  weights: { preserve_booking: number; maximize_attractions: number; relaxed: number }
+  selection_count: number
+}
+export interface WeatherContext {
+  source: 'live' | 'fixture' | 'unavailable'
+  date: string
+  timezone: string
+  hours: { time: string; precipitation_probability: number | null }[]
+  warnings: string[]
+}
 export interface ReplanResponse {
   status: 'placeholder'
   event: { event_type: 'weather' | 'delay' | 'closure' | 'unknown'; delay_minutes: number; affected_item_id: string | null; summary: string }
+  weather: WeatherContext
+  preferences: Preference
   plans: { id: string; strategy: 'preserve_booking' | 'maximize_attractions' | 'relaxed'; title: string; items: TripItem[]; explanation: string }[]
   warnings: string[]
 }
@@ -16,7 +30,8 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 export const getTrip = () => request<Trip>('/trip')
-export const replan = (message: string) => request<ReplanResponse>('/replan', {
+export const getPreferences = () => request<Preference>('/preferences')
+export const replan = (message: string, now?: string) => request<ReplanResponse>('/replan', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ trip_id: 'tokyo-demo', message }),
+  body: JSON.stringify({ trip_id: 'tokyo-demo', message, now }),
 })

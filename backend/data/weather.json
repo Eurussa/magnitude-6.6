@@ -1,0 +1,17 @@
+{
+  "timezone": "Asia/Tokyo",
+  "hours": [
+    {"time": "09:00", "precipitation_probability": 10},
+    {"time": "10:00", "precipitation_probability": 10},
+    {"time": "11:00", "precipitation_probability": 20},
+    {"time": "12:00", "precipitation_probability": 30},
+    {"time": "13:00", "precipitation_probability": 60},
+    {"time": "14:00", "precipitation_probability": 90},
+    {"time": "15:00", "precipitation_probability": 90},
+    {"time": "16:00", "precipitation_probability": 90},
+    {"time": "17:00", "precipitation_probability": 60},
+    {"time": "18:00", "precipitation_probability": 30},
+    {"time": "19:00", "precipitation_probability": 20},
+    {"time": "20:00", "precipitation_probability": 10}
+  ]
+}

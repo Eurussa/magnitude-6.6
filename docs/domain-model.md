@@ -1,49 +1,39 @@
 # Domain Model
 
-此文件記錄團隊共用的產品名詞與概念關係，不代表最終 API schema 或資料庫設計。
+此文件記錄五小時 MVP 的共用名詞；精確欄位見 `DEVELOPMENT_SPEC.md` 與 `backend/models.py`，可執行 API 以 `/openapi.json` 為準。未來概念不代表已實作。
 
 ## 核心名詞
 
-### Traveler
+| 名詞 | MVP 定義與責任 |
+|---|---|
+| Traveler | 固定 `demo-user`；不做登入、多人同行或多使用者隔離 |
+| Trip | 固定 Tokyo 單日行程；種子初始化目前行程，後續重排應接續已套用版本 |
+| TripItem / Itinerary Item | 行程項目，含時間、位置、室內外與預約／移動限制；fixture 由 B 維護 |
+| Event / Disruption | A 從使用者文字解析並驗證的 weather、delay、closure 或 unknown 事件；LLM 解析仍待實作 |
+| WeatherContext | A 取得並整理的 Open-Meteo 或 fixture 資料，包含來源、日期、時區與逐時降雨機率；B 判斷受影響活動 |
+| Candidate Plan / Recovery Option | B 生成的 A/B/C 替代方案；只有通過可行性檢查的 ready 方案才可套用 |
+| Impact / Changes（目標） | B 計算的保留、移動、取消與交通／預約代價；A 依事實產生推薦解釋 |
+| Preference | A 管理三個權重 `preserve_booking`、`maximize_attractions`、`relaxed` 及 `selection_count`；初始權重皆為 1 |
+| Replan snapshot（目標） | 由伺服器保存的一次重排、原行程版本與候選方案，以 `replan_id` 辨識 |
+| Selection（目標） | 使用者以 `replan_id` / `plan_id` 選擇已保存方案，A 驗證並保存；同次重複選擇不重複增加權重 |
+| Applied Plan / Recovery Plan（目標） | 通過驗證並套用後的目前 Trip；不代表已執行真實訂位或改訂 |
 
-使用本服務處理旅程異常的人。
+## 目標資料流
 
-### Trip
+1. A 載入目前 Trip、Preference，解析 Event 並取得 WeatherContext，組成 ReplanContext。
+2. B 以相同輸入生成可重現的候選方案，檢查限制並計算 impact 與偏好分數。
+3. A 組成說明、保存 snapshot，回傳候選方案供旅客比較。
+4. 選擇流程完成後，A 從伺服器 snapshot 讀取特徵，同次更新目前 Trip、Preference 與 Selection。
+5. 下一次重排讀取更新後的 Trip 與 Preference；不由前端自報權重或任意覆寫行程。
 
-旅客為特定目的安排的一段完整旅程，可包含多個交通、住宿或活動項目。
+## 儲存邊界與現況
 
-### Itinerary Item
+- `backend/data/trip.json` 與 `preferences.json` 是唯讀種子；runtime 使用 `backend/data/runtime/state.json`，目前包含 schema_version、trip、preferences，不使用 DB、不納入 Git。
+- A 負責可變狀態驗證、單程序鎖與原子寫入；B 的演算法只接收模型，不直接存取檔案。服務只使用單一 worker。
+- 目前提供 trip / preferences 的內部保存介面與 HTTP 讀取；沒有 HTTP 任意儲存／重置介面，沒有 snapshot 或選擇 endpoint。
+- 未來套用選擇必須拒絕不可行／過期方案，並保證相同選擇重送不重複學習。
+- 目前仍是 placeholder 解析及方案；儲存與 context 介面不代表方案已可行或偏好學習已完成。
 
-旅程中的單一項目，例如航班、鐵路、住宿或活動。
+## 明確不做與後續待辦
 
-### Disruption
-
-影響原定旅程的突發事件，例如取消、延誤、錯過轉乘或目的地狀況改變。
-
-### Impact
-
-突發事件對後續行程造成的具體影響。
-
-### Recovery Option
-
-針對旅程異常提出的一個可行替代方案。
-
-### Recovery Plan
-
-旅客選定後，準備執行或已執行的重新安排方案。
-
-## 概念關係
-
-- 一位 Traveler 可以有多個 Trip。
-- 一個 Trip 可以包含多個 Itinerary Item。
-- 一個 Disruption 可以影響一個或多個 Itinerary Item。
-- 一個 Disruption 可以產生多個 Recovery Option。
-- 旅客可從 Recovery Option 中選擇一個形成 Recovery Plan。
-
-## 待確認事項
-
-- Trip 是否允許多位 Traveler？
-- Recovery Option 是否包含價格、抵達時間、風險與限制？
-- 系統是否需要保存方案失效或價格變動紀錄？
-- Disruption 的資料來源為何？
-- 哪些名詞需要與後端或外部服務的用語保持一致？
+本次不做多旅客、多日最佳化、真實訂位、即時價格或訂位失效追蹤。行程日期、事件影響時間窗、候選營業時間、交通 fixture 與方案版本欄位需隨真實重排實作補齊並同步共用 schema；目前以 request.now 的行程當地日期取得天氣，未提供時取當地目前時間，這不表示無日期的展示行程就是實際當日行程。

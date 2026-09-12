@@ -7,14 +7,16 @@
 ## Team responsibilities
 
 - Frontend：由目前 repo owner 負責
-- Backend：由另外兩位成員負責
+- Backend A：`agent/` 的事件解析、context、天氣、偏好讀寫與推薦解釋；整合 `main.py` 與 `models.py`
+- Backend B：`replanner/` 的 deterministic candidates、可行性、scoring / impact；維護行程、候選與交通 fixture
+- `data/` 依內容分工：A 管偏好、天氣與 runtime JSON，B 管行程與排程 fixture；不是整包由 B 擁有
 - 前後端透過明確的 API contract 協作
 
 ## Current stage
 
-- 專案處於需求與架構討論階段
-- 前端技術尚未決定
-- 未記錄於 `docs/decisions/` 的技術選型，不視為已確定
+- 已有 React / Vite / TypeScript 前端、單一 FastAPI 後端與 placeholder replan；完整 Demo 仍在開發
+- 後端先使用 runtime JSON，不使用 DB；唯讀種子與可變狀態分開，服務限單 worker
+- 已確認架構見 `docs/decisions/001-backend-boundaries-runtime-json.md`；新增技術選型仍須記錄於 `docs/decisions/`
 
 ## Working agreements
 
@@ -24,7 +26,8 @@
 - 重要決策記錄於 `docs/decisions/`
 - 修改產品流程時，同步更新 `docs/product-flow.md`
 - 修改核心名詞或資料關係時，同步更新 `docs/domain-model.md`
-- 套件管理工具與開發指令確定後，補充於本文件
+- 前端使用 `pnpm dev`；後端使用 `python -m uvicorn backend.main:app --reload`，不啟用多 worker
+- B 只接收已驗證的 event / weather / preferences，不呼叫外部 API、不讀寫 runtime；A 不在 orchestration 內實作排程演算法
 
 ## Git and commit rules
 
@@ -41,7 +44,7 @@
 - 不使用 `--no-verify` 跳過檢查
 - 不 amend、rebase、force-push 或改寫既有 Git history，除非使用者明確要求
 - 不直接 force-push `main`
-- 不提交 `.env`、secrets、`node_modules`、`.venv` 或 SQLite runtime 檔案
+- 不提交 `.env`、secrets、`node_modules`、`.venv`、`backend/data/runtime/` 或資料庫 runtime 檔案
 - 共用檔案發生衝突時保留雙方變更並交由 owner 整合，不以整檔覆蓋處理
 
 ## Safety

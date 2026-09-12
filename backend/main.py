@@ -1,13 +1,16 @@
-import json
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from .agent.parser import parse_event
-from .models import ReplanRequest, ReplanResponse, Trip
+from .agent.context import build_context
+from .agent.explanation import explain_plan
+from .agent.preference import get_preferences
+from .agent.runtime import RuntimeStorageError, RuntimeStore
+from .models import Preference, ReplanRequest, ReplanResponse, Trip
 from .replanner.planner import candidate_plans
 
 ROOT = Path(__file__).resolve().parent
@@ -18,8 +21,16 @@ app.add_middleware(CORSMiddleware,
     allow_methods=["GET", "POST"], allow_headers=["Content-Type"])
 
 
-def load_trip() -> Trip:
-    return Trip.model_validate(json.loads((ROOT / "data/trip.json").read_text()))
+_store = RuntimeStore()  # Constructing the shared store does not read or write files.
+
+
+def get_store() -> RuntimeStore:
+    return _store
+
+
+@app.exception_handler(RuntimeStorageError)
+async def storage_error(request: Request, exc: RuntimeStorageError) -> JSONResponse:
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
 @app.get("/api/health")
@@ -28,12 +39,26 @@ def health() -> dict[str, str]:
 
 
 @app.get("/api/trip", response_model=Trip)
-def trip() -> Trip:
-    return load_trip()
+def trip(store: RuntimeStore = Depends(get_store)) -> Trip:
+    return store.get_trip()
+
+
+@app.get("/api/preferences", response_model=Preference)
+def preferences(store: RuntimeStore = Depends(get_store)) -> Preference:
+    return get_preferences(store)
 
 
 @app.post("/api/replan", response_model=ReplanResponse)
-def replan(request: ReplanRequest) -> ReplanResponse:
-    return ReplanResponse(event=parse_event(request.message),
-        plans=candidate_plans(load_trip()),
-        warnings=["Placeholder：未呼叫 LLM、未套用天氣、未驗證可行性，不能當作實際重排結果。"])
+async def replan(
+    request: ReplanRequest, store: RuntimeStore = Depends(get_store),
+) -> ReplanResponse:
+    context = await build_context(request, store)
+    plans = candidate_plans(context.trip, event=context.event, weather=context.weather,
+                            preferences=context.preferences, now=context.now)
+    return ReplanResponse(
+        event=context.event, weather=context.weather, preferences=context.preferences,
+        plans=[explain_plan(plan) for plan in plans],
+        warnings=context.weather.warnings + [
+            "Placeholder：未呼叫 LLM；已取得天氣與偏好 context，但尚未套用於排程、評分或可行性驗證。",
+        ],
+    )
