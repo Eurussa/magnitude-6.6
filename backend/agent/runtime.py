@@ -20,7 +20,7 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 class RuntimeState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     trip: Trip
     preferences: Preference
 

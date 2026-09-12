@@ -3,7 +3,7 @@
 ## Scope
 
 - 本文件適用於 `backend/` 及其子目錄，並補充 repository 根目錄的 `AGENTS.md`；根目錄的產品範圍、分工、Git 與安全規範仍然有效。
-- 共用需求與 API 目標以 `docs/DEVELOPMENT_SPEC.md` 為準；目前實際契約以 FastAPI 產生的 `/openapi.json` 為準。
+- 共用需求以 `docs/DEVELOPMENT_SPEC.md`、固定外層契約以 `docs/api-contract.md` 為準；實際 schema 以 FastAPI 產生的 `/openapi.json` 為準。
 - 本文件只規範程式碼品質與協作方式，不定義 planner、scoring、weather、LLM parsing 或 preference learning 的商業規則。這些規則由 Backend A/B 協議後記錄於共用規格或 `docs/decisions/`。
 
 ## Runtime and dependencies
@@ -16,7 +16,7 @@
 ## Module boundaries
 
 - `main.py` 負責 FastAPI app、route 與高階 orchestration，不放大型演算法、provider-specific parsing 或 persistence 細節。
-- `models.py` 是共用 Pydantic request/response schema 的來源；不要在 route 或其他 module 重複定義相同 payload。
+- `models.py` 是共用 Pydantic request/response schema 的來源，`contracts.py` 定義 A/B 的 `ReplanContext → PlanningResult` Protocol；不要在 route 或 owner package 內重複定義相同 payload。
 - `agent/` 與 `replanner/` 的責任和 owner 依根目錄 `AGENTS.md`。跨 owner 的介面變更先同步，不直接把另一個 module 的內部實作複製過來。
 - module 之間透過清楚、有型別的函式或 class 介面合作，避免 circular imports 與對 private implementation 的依賴。
 - 將外部服務、時間與持久化等 side effects 留在邊界，使核心邏輯能以固定輸入做單元測試。
