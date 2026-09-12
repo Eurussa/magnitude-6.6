@@ -1,5 +1,5 @@
 import type { TripItem } from '../api/client'
-import { formatTripDate, getTripClock, groupTripItems, isNextItem } from '../utils/tripTime'
+import { formatTripDate, getTripClock, groupTripItems, isNextItem, isPastItem } from '../utils/tripTime'
 import { TripTimeline } from './TripTimeline'
 
 interface MultiDayScheduleProps {
@@ -24,13 +24,29 @@ export function MultiDaySchedule({ items, timezone, showMaps = true }: MultiDayS
       {days.map((day) => {
         const isToday = day.date === clock.date
         if (isToday) {
+          const earlierItems = day.items.filter((item) => isPastItem(item, clock))
+          const activeAndLaterItems = day.items.filter((item) => !isPastItem(item, clock))
           return (
             <section className="rounded-3xl bg-white" key={day.date}>
               <div className="flex min-h-12 items-center justify-between gap-3 px-2">
                 <h3 className="font-bold text-[#10234a]">{formatTripDate(day.date, clock.date)}</h3>
                 <span className="text-xs font-semibold text-[#5d7187]">{day.items.length} 個活動</span>
               </div>
-              <TripTimeline clock={clock} items={day.items} nextItemId={nextItemId} showMaps={showMaps} />
+              {earlierItems.length > 0 && (
+                <details className="group mb-2 rounded-2xl bg-[#f5f8fa]">
+                  <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-3 text-sm font-semibold text-[#5d7187] focus-visible:outline-none">
+                    <span>較早行程</span>
+                    <span className="flex items-center gap-2">
+                      {earlierItems.length} 筆
+                      <span aria-hidden="true" className="text-base transition group-open:rotate-180">⌄</span>
+                    </span>
+                  </summary>
+                  <div className="border-t border-[#e2eaf0] px-1 pt-1">
+                    <TripTimeline clock={clock} items={earlierItems} showMaps={showMaps} />
+                  </div>
+                </details>
+              )}
+              <TripTimeline clock={clock} items={activeAndLaterItems} nextItemId={nextItemId} showMaps={showMaps} />
             </section>
           )
         }

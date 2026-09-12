@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Plan, PlanId } from '../api/client'
-import { MultiDaySchedule } from './MultiDaySchedule'
+import { PlanSchedulePreview } from './PlanSchedulePreview'
 
 interface PlanCardProps {
   plan: Plan
@@ -32,9 +32,9 @@ export function PlanCard({ plan, canApply, isApplying, isRecommended, onApply, t
       <p className="mt-4 break-words leading-7 text-[#29445e]">{plan.explanation}</p>
 
       {expanded && (
-        <div className="mt-4 rounded-2xl bg-[#f5f9fc] p-4">
-          <p className="text-sm font-semibold text-[#29445e]">方案中的行程</p>
-          <MultiDaySchedule items={plan.items} showMaps={false} timezone={timezone} />
+        <div className="mt-4 rounded-2xl bg-[#f1f6f8] p-3">
+          <p className="px-1 text-sm font-semibold text-[#29445e]">方案中的行程</p>
+          <PlanSchedulePreview items={plan.items} timezone={timezone} />
         </div>
       )}
 
