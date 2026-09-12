@@ -21,10 +21,10 @@ Accepted — 2026-09-12；其中 Backend B 的 deterministic replanning 與「�
 - 可變資料集中於 `backend/data/runtime/state.json`，目前含 `schema_version=1`、`trip`、`preferences`。A 的 RuntimeStore 在首次讀取時由種子初始化；後續驗證並讀寫 runtime，不覆寫種子。
 - 每次狀態更新先完整寫入同目錄暫存檔、fsync，再以原子 replace 取代狀態檔，單程序鎖保護 read-modify-write；失敗時報錯，不靜默重置資料。
 - 只部署單一 worker。鎖定方式不支援多程序並行寫入，也不宣稱具有跨服務資料庫交易保證。runtime 不納入 Git；開發／Demo 重置須先停止服務，再移除自己的 runtime 狀態，下次讀取由種子初始化。
-- 選擇流程使用 `/api/selections` 與 `replan_id` / `plan_id`。伺服器保存候選 snapshot 後才接受選擇，套用行程、偏好與選擇紀錄須在同次 runtime 更新完成；相同選擇不得重複加分。Route 與 schema 已註冊但目前回 501；snapshot、交易與學習迴圈尚未實作，後續需擴充 state schema。
+- 選擇流程使用 `/api/selections` 與 `replan_id` / `plan_id`。伺服器保存候選 snapshot 後才接受選擇，套用行程、偏好與選擇紀錄在同次 runtime 更新完成；相同選擇重送回保存的 response，不重複加分。
 
 ## Consequences
 
 A/B 可各自以固定輸入開發，整合依賴共用模型與函式介面；沒有第二個 server 或 DB 的設定成本。內部保存介面可讓偏好與目前行程跨重新啟動保留，種子仍可重置 Demo；本次沒有開放任意 HTTP 儲存或重置 endpoint。
 
-單檔 JSON 適用單使用者 Hackathon 展示，資料量增加時重寫成本會上升；多 worker、正式多使用者與大量歷史紀錄皆不在此決策範圍。儲存架構完成不代表 LLM、真實重排、方案選擇或學習迴圈完成；以 API 實作狀態及測試為準。
+單檔 JSON 適用單使用者 Hackathon 展示，資料量增加時重寫成本會上升；多 worker、正式多使用者與大量歷史紀錄皆不在此決策範圍。儲存與選擇交易完成不代表外部事件 LLM 或 B 的真實跨日重排完成；以 API 實作狀態及測試為準。

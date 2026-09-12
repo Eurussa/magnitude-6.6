@@ -1,5 +1,7 @@
 import os
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -8,14 +10,21 @@ from fastapi.responses import JSONResponse
 
 from .agent.context import build_context
 from .agent.explanation import explain_plan
-from .agent.preference import get_preferences
+from .agent.preference import get_preferences, preference_insight
 from .agent.runtime import RuntimeStorageError, RuntimeStore
+from .agent.selection import (
+    SelectionConflictError,
+    SelectionNotFoundError,
+    apply_selection,
+)
+from .contracts import Replanner
 from .models import (
     ErrorResponse,
     HealthResponse,
     Preference,
     ReplanRequest,
     ReplanResponse,
+    ReplanSnapshot,
     SelectionRequest,
     SelectionResponse,
     Trip,
@@ -31,10 +40,16 @@ app.add_middleware(CORSMiddleware,
 
 
 _store = RuntimeStore()  # Constructing the shared store does not read or write files.
+_replanner: Replanner | None = None
 
 
 def get_store() -> RuntimeStore:
     return _store
+
+
+def get_replanner() -> Replanner | None:
+    """Return B's configured implementation; None keeps the safe placeholder path."""
+    return _replanner
 
 
 @app.exception_handler(RuntimeStorageError)
@@ -64,9 +79,45 @@ def preferences(store: RuntimeStore = Depends(get_store)) -> Preference:
 
 @app.post("/api/replan", response_model=ReplanResponse, responses=STORAGE_ERROR_RESPONSE)
 async def replan(
-    request: ReplanRequest, store: RuntimeStore = Depends(get_store),
+    request: ReplanRequest,
+    store: RuntimeStore = Depends(get_store),
+    replanner: Replanner | None = Depends(get_replanner),
 ) -> ReplanResponse:
     context = await build_context(request, store)
+    if replanner is not None:
+        result = await replanner.generate_plans(context)
+        plans = [explain_plan(plan) for plan in result.plans]
+        replan_id = uuid4()
+        snapshot = ReplanSnapshot(
+            replan_id=replan_id,
+            trip_id=context.trip.id,
+            trip_version=context.trip.version,
+            planning_source=result.source,
+            plans=plans,
+            recommended_plan_id=result.recommended_plan_id,
+            created_at=datetime.now(timezone.utc),
+        )
+        store.save_replan_snapshot(snapshot)
+        recommended = next(
+            (plan for plan in plans if plan.id == result.recommended_plan_id),
+            None,
+        )
+        return ReplanResponse(
+            status="ready",
+            replan_id=replan_id,
+            planning_source=result.source,
+            event=context.event,
+            weather=context.weather,
+            preferences=context.preferences,
+            plans=plans,
+            recommended_plan_id=result.recommended_plan_id,
+            preference_insight=preference_insight(
+                context.preferences,
+                recommended.strategy if recommended is not None else None,
+            ),
+            warnings=context.weather.warnings + result.warnings,
+        )
+
     plans = candidate_plans(context.trip, event=context.event, weather=context.weather,
                             preferences=context.preferences, now=context.now)
     return ReplanResponse(
@@ -94,7 +145,6 @@ async def replan(
             "model": ErrorResponse,
             "description": "Selection conflict, infeasible plan, or stale trip",
         },
-        501: {"model": ErrorResponse, "description": "Selection workflow not implemented"},
         **STORAGE_ERROR_RESPONSE,
     },
 )
@@ -102,11 +152,9 @@ def select_plan(
     selection: SelectionRequest,
     store: RuntimeStore = Depends(get_store),
 ) -> SelectionResponse:
-    del selection, store
-    raise HTTPException(
-        status_code=501,
-        detail=(
-            "方案選擇契約已建立，但 snapshot、套用行程"
-            "與偏好更新尚未實作。"
-        ),
-    )
+    try:
+        return apply_selection(store, selection)
+    except SelectionNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except SelectionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc

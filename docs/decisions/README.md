@@ -15,7 +15,7 @@
 | [005 LLM-driven 行程重排與偏好排序](005-llm-driven-replanning.md) | Accepted | B 的 planning LLM、structured output 驗證與 deterministic preference scoring |
 | [006 Multi-day Trip、Event 與 Weather schema](006-multi-day-trip-schema.md) | Accepted | 多日日期模型、跨日事件／方案、多日天氣與 runtime version 2 |
 
-技術選型、contract 狀態與實作進度分開記錄；LLM 的事件解析、行程重排責任及外層 schema 已確定，但 provider/model 尚未選定，真正解析、重排、snapshot 與 selection 交易仍未實作。Frontend owner 需依 [API 契約](../api-contract.md) 同步 types。
+技術選型、contract 狀態與實作進度分開記錄；LLM 的事件解析、行程重排責任及外層 schema 已確定，但 provider/model 尚未選定。Backend A 已完成本機事件 fallback、replanner 注入、snapshot 與 selection 交易；外部事件 LLM 與 B 的真正跨日重排仍待接通。Frontend owner 需依 [API 契約](../api-contract.md) 同步 types。
 
 ## 維護方式
 

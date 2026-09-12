@@ -21,7 +21,7 @@
 | `GET /api/trip` | 無 | `Trip` | 503 `ErrorResponse` |
 | `GET /api/preferences` | 無 | `Preference` | 503 `ErrorResponse` |
 | `POST /api/replan` | `ReplanRequest` | `ReplanResponse` | 422 validation；503 `ErrorResponse` |
-| `POST /api/selections` | `SelectionRequest` | `SelectionResponse` | 404 snapshot/plan 不存在；409 不可行、已改選或 Trip 版本衝突；422 validation；501 契約已有但流程尚未實作；503 storage |
+| `POST /api/selections` | `SelectionRequest` | `SelectionResponse` | 404 snapshot/plan 不存在；409 不可行、已改選或 Trip 版本衝突；422 validation；503 storage |
 
 除 FastAPI 標準 422 validation body 外，應用程式錯誤使用 `ErrorResponse = {"detail": string}`，不得回傳金鑰或 provider 敏感內容。
 
@@ -112,7 +112,7 @@ class Replanner(Protocol):
     async def generate_plans(self, context: ReplanContext, /) -> PlanningResult: ...
 ```
 
-此介面定義於 `backend/contracts.py`。目前 `candidate_plans(...)` 只是相容既有主流程的 placeholder；B 完成後由 A 在 `main.py` 注入／呼叫 `Replanner.generate_plans`，不在 main 內加入排程邏輯。
+此介面定義於 `backend/contracts.py`。目前 `candidate_plans(...)` 只供未注入 B 實例時產生安全 placeholder；A 已在 `main.py` 建立 dependency boundary，取得 B 實例後呼叫 `Replanner.generate_plans`，不在 main 內加入排程邏輯。
 
 ## Replan response 與 snapshot
 
@@ -129,7 +129,7 @@ class Replanner(Protocol):
 | `preference_insight` | string or null |
 | `warnings` | string[]；合併 context 與 replanner warnings |
 
-`ready` 必須有 `replan_id`，planning_source 不得為 unavailable；至少一個方案 feasible 時必須有 recommendation。`placeholder` 的 replan_id 必須為 null、planning_source 必須為 unavailable，不能提供可選 snapshot。現在的 `/api/replan` 固定回 placeholder；A/B 完成整合後才切 ready。
+`ready` 必須有 `replan_id`，planning_source 不得為 unavailable；至少一個方案 feasible 時必須有 recommendation。`placeholder` 的 replan_id 必須為 null、planning_source 必須為 unavailable，不能提供可選 snapshot。未注入 B 實例時 `/api/replan` 回 placeholder；注入實例並取得有效 `PlanningResult` 後，A 先保存 snapshot 再回 ready。
 
 ### `ReplanSnapshot`（runtime internal）
 
@@ -161,7 +161,7 @@ class Replanner(Protocol):
 
 上例省略 Trip 其他必填欄位，只說明 response 形狀。成功選擇必須在一次 runtime 原子交易中：檢查 snapshot 與 `trip_version`、保存 SelectionRecord、以 `Plan.items` 更新 Trip 並將 version +1、依 snapshot 內 PlanFeatures 更新 Preference。相同 `replan_id + plan_id` 重送回相同成功結果且不得再次加權；相同 replan_id 改選、選擇 infeasible plan 或 Trip 版本過期回 409；snapshot 或 plan 不存在回 404。
 
-目前 `POST /api/selections` 已註冊 request/response/error schema，但固定回 501。Backend A 完成 snapshot 與原子交易前，Frontend 不得把方案選擇視為可用功能。
+`POST /api/selections` 已實作 snapshot 查找、feasible 與 Trip version 驗證、方案套用、Trip.version +1、偏好更新及 selection 保存。相同選擇重送會回第一次保存的 response，不重複加權；只有 ready replan 產生的 snapshot 可選。
 
 ## A/B orchestration
 
