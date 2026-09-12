@@ -20,7 +20,7 @@
 2. 輸入文字，呼叫 `POST /api/replan`；可選 `now` 必須帶 offset，未提供時取行程當地目前時間。
 3. Backend A 從同一份 runtime state 讀取多日行程與偏好，解析 placeholder 事件並取得涵蓋 Trip 未來日期區間的正規化天氣 context，再交給 Backend B 的 planner。
 4. API 回傳完整 `ReplanResponse`；目前為 `status=placeholder`、null replan/recommendation、`planning_source=unavailable`。事件仍為 `unknown`，後端 A/B/C 都沿用完整多日行程並標示 `feasible=false`。前端在 placeholder 狀態使用固定 fixture 呈現有差異的多日方案，明確標示為示範、不開放套用，也不視為後端完成的重排。
-5. 目前行程在 timeline 前提供「當日路線」預覽。使用者選擇有活動的日期後，前端只以該日活動、依時間順序建立 Google Maps Embed directions（單一活動使用 place）與外部 Maps URL；Embed key 缺少時保留外部連結並顯示 fallback。
+5. 目前行程在 timeline 前提供「本日路線」入口；使用者開啟 modal 並選擇有活動的日期後，前端只以該日活動、依時間順序建立 Google Maps Embed directions（單一活動使用 place）與外部 Maps URL。Embed key 缺少時保留外部連結並顯示 fallback。
 6. `POST /api/selections` 已註冊 `SelectionRequest`／`SelectionResponse` 與錯誤 schema，但在 snapshot 與原子套用完成前固定回 501。
 
 天氣 adapter 已移至 A 的 `agent/weather.py` 並接入 context。預設 `WEATHER_MODE=mock` 使用具明確日期且涵蓋三日的 fixture；live 模式以 date range 呼叫 Open-Meteo，失敗時嘗試完整 fixture，仍不可用時標示 unavailable。API 以 `weather.source` 區分來源，並以 `start_date`／`end_date` 表示涵蓋區間；不把降雨機率當作大雨強度。

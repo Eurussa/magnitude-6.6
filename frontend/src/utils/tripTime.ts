@@ -46,3 +46,12 @@ export function formatTripDate(date: string, currentDate: string) {
   const formatted = new Intl.DateTimeFormat('zh-TW', { month: 'numeric', day: 'numeric', weekday: 'short', timeZone: 'UTC' }).format(new Date(`${date}T12:00:00Z`))
   return date === currentDate ? `今天 · ${formatted}` : formatted
 }
+
+export function formatDuration(totalMinutes: number) {
+  if (totalMinutes <= 0) return '少於 1 分'
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours === 0) return `${minutes} 分`
+  if (minutes === 0) return `${hours} 小時`
+  return `${hours} 小時 ${minutes} 分`
+}

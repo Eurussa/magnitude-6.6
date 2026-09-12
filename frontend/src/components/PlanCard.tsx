@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import type { Plan, PlanId } from '../api/client'
 import { PlanSchedulePreview } from './PlanSchedulePreview'
 
@@ -13,9 +13,10 @@ interface PlanCardProps {
 
 export function PlanCard({ plan, canApply, isApplying, isRecommended, onApply, timezone }: PlanCardProps) {
   const [expanded, setExpanded] = useState(false)
+  const scheduleId = useId()
 
   return (
-    <article className="rounded-3xl border border-[#d7e2ea] bg-white p-4 shadow-[0_10px_24px_rgba(16,35,74,0.06)]">
+    <article className={`rounded-3xl border bg-white p-4 shadow-[0_10px_24px_rgba(16,35,74,0.06)] transition-colors ${expanded ? 'border-[#82b9b5] ring-2 ring-[#168b86]/10' : 'border-[#d7e2ea]'}`}>
       <div className="flex items-start gap-3">
         <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-[#eaf6f5] font-bold text-[#117570]">
           {plan.id}
@@ -32,8 +33,8 @@ export function PlanCard({ plan, canApply, isApplying, isRecommended, onApply, t
       <p className="mt-4 break-words leading-7 text-[#29445e]">{plan.explanation}</p>
 
       {expanded && (
-        <div className="mt-4 rounded-2xl bg-[#f1f6f8] p-3">
-          <p className="px-1 text-sm font-semibold text-[#29445e]">方案中的行程</p>
+        <div className="mt-4 rounded-2xl border border-[#efc49f] bg-[#fff4e8] p-3" id={scheduleId}>
+          <p className="px-1 text-sm font-bold text-[#7d4527]">方案中的行程</p>
           <PlanSchedulePreview items={plan.items} timezone={timezone} />
         </div>
       )}
@@ -46,8 +47,9 @@ export function PlanCard({ plan, canApply, isApplying, isRecommended, onApply, t
 
       <div className="mt-4 flex gap-2">
         <button
+          aria-controls={scheduleId}
           aria-expanded={expanded}
-          className="min-h-11 rounded-xl border border-[#cbd8e5] px-4 text-sm font-semibold text-[#29445e] active:bg-[#edf5fb]"
+          className={`min-h-11 rounded-xl border px-4 text-sm font-semibold transition-colors ${expanded ? 'border-[#117570] bg-[#e1f2f0] text-[#0c625e]' : 'border-[#cbd8e5] text-[#29445e] active:bg-[#edf5fb]'}`}
           onClick={() => setExpanded((value) => !value)}
           type="button"
         >

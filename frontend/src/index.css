@@ -58,6 +58,19 @@ textarea:focus-visible {
   box-shadow: 0 0 48px rgb(16 35 74 / 10%);
 }
 
+@keyframes timeline-ring-pulse {
+  0%,
+  100% {
+    transform: scale(0.9);
+    opacity: 0.55;
+  }
+
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
