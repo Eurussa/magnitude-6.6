@@ -23,11 +23,11 @@ function ScheduleAccordion({ children, countLabel, title, variant = 'outlined' }
   const isSubtle = variant === 'subtle'
 
   return (
-    <section className={isSubtle ? 'mb-2 rounded-2xl bg-[#f5f8fa]' : 'rounded-2xl border border-[#d7e2ea] bg-white'}>
+    <section className={isSubtle ? 'mb-2 overflow-hidden rounded-2xl border border-[#c8d6df] bg-white' : 'rounded-2xl border border-[#d7e2ea] bg-white'}>
       <button
         aria-controls={contentId}
         aria-expanded={expanded}
-        className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-2xl text-left focus-visible:outline-none ${isSubtle ? 'min-h-12 px-3 text-sm font-semibold text-[#5d7187]' : 'min-h-14 px-4 font-bold text-[#173b57]'}`}
+        className={`flex w-full cursor-pointer items-center justify-between gap-3 text-left focus-visible:outline-none ${isSubtle ? 'min-h-12 bg-[#e3edf1] px-3 text-sm font-bold text-[#355169]' : 'min-h-14 rounded-2xl px-4 font-bold text-[#173b57]'}`}
         onClick={() => setExpanded((value) => !value)}
         type="button"
       >
@@ -37,7 +37,7 @@ function ScheduleAccordion({ children, countLabel, title, variant = 'outlined' }
           <ChevronDownIcon className={`size-5 shrink-0 transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`} />
         </span>
       </button>
-      {expanded && <div className="border-t border-[#e2eaf0] px-2 pt-1" id={contentId}>{children}</div>}
+      {expanded && <div className={`border-t px-2 pt-1 ${isSubtle ? 'border-[#c8d6df] bg-white' : 'border-[#e2eaf0]'}`} id={contentId}>{children}</div>}
     </section>
   )
 }

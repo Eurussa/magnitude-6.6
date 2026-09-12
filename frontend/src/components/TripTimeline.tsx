@@ -14,7 +14,7 @@ export function TripTimeline({ items, clock, emphasizeNext = false, nextItemId, 
         const isPast = isPastItem(item, clock)
         return (
           <li className={`grid grid-cols-[54px_18px_minmax(0,1fr)] gap-2 rounded-2xl px-2 pt-3 ${isCurrent ? 'bg-[#fff1df]' : ''}`} key={item.id}>
-            <time className={`pt-0.5 font-semibold tabular-nums ${isPast ? 'text-[#93a1ae]' : 'text-[#173b57]'}`}>{item.start_time}</time>
+            <time className={`pt-0.5 font-semibold tabular-nums ${isPast ? 'text-[#5d7187]' : 'text-[#173b57]'}`}>{item.start_time}</time>
             <span className="relative flex justify-center" aria-hidden="true">
               {(isCurrent || isEmphasizedNext) && (
                 <span className="absolute top-0.5 size-5 rounded-full border border-[#f47c57]/60 motion-safe:[animation:timeline-ring-pulse_1.6s_ease-in-out_infinite]" />
@@ -24,7 +24,7 @@ export function TripTimeline({ items, clock, emphasizeNext = false, nextItemId, 
             </span>
             <div className="min-w-0 pb-6">
               <div className="flex flex-wrap items-center gap-2">
-                <p className={`break-words font-semibold ${isPast ? 'text-[#8695a2]' : 'text-[#10234a]'}`}>{item.name}</p>
+                <p className={`break-words font-semibold ${isPast ? 'text-[#52697d]' : 'text-[#10234a]'}`}>{item.name}</p>
                 {isCurrent && <span className="rounded-full bg-[#f47c57] px-2 py-0.5 text-xs font-bold text-white">現在</span>}
                 {isNext && <span className="rounded-full bg-[#eaf6f5] px-2 py-0.5 text-xs font-bold text-[#117570]">接下來</span>}
               </div>
