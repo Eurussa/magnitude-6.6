@@ -1,0 +1,3 @@
+interface:
+  display_name: "API Contract"
+  short_description: "定義前後端與模組契約，核對欄位、錯誤行為及相容性與同步要求"

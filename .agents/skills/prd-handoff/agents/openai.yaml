@@ -1,0 +1,3 @@
+interface:
+  display_name: "PRD Handoff"
+  short_description: "撰寫清楚可驗收的 PRD，交接給另一個模型完成前後端實作"
