@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getTrip, replan, selectPlan, type PlanId, type ReplanResponse, type Trip } from '../api/client'
 import { EventSheet } from '../components/EventSheet'
+import { DailyRouteMap } from '../components/DailyRouteMap'
 import { LoadingView } from '../components/LoadingView'
 import { MultiDaySchedule } from '../components/MultiDaySchedule'
 import { ResultsView } from '../components/ResultsView'
@@ -182,6 +183,8 @@ export function TripPage() {
               </button>
             </div>
           )}
+
+          {trip && <DailyRouteMap items={visibleItems} timezone={trip.timezone} />}
 
           {trip && <MultiDaySchedule items={visibleItems} timezone={trip.timezone} />}
 
