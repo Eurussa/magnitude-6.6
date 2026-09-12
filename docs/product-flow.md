@@ -19,15 +19,15 @@
 1. 開啟 `/trip`，透過 `GET /api/trip` 載入 runtime 中的目前 multi-day `tokyo-demo`；前端依 `scheduled_date` 分組，今天直接顯示、接下來幾天可點擊展開。`GET /api/preferences` 可讀取已保存偏好。首次讀取才由唯讀種子建立 schema version 2 的 `backend/data/runtime/state.json`。
 2. 輸入文字，呼叫 `POST /api/replan`；可選 `now` 必須帶 offset，未提供時取行程當地目前時間。
 3. Backend A 從同一份 runtime state 讀取多日行程與偏好，以 LLM structured output 解析事件（無設定、provider 或驗證失敗時使用本機 fallback），並取得涵蓋 Trip 未來日期區間的正規化天氣 context，再交給 Backend B 的 planner boundary。
-4. 未注入 B 實例時，API 回傳 `status=placeholder`、null replan/recommendation、`planning_source=unavailable`；後端 A/B/C 沿用完整多日行程、標示 `feasible=false`，前端使用明確標示的固定 fixture 預覽方案差異但不開放套用。注入符合 Protocol 的 B 實例後，A 保存 snapshot 並回 ready。
+4. `main.py` 預設注入 Backend B 的 async `LLMReplanner`；B 以 live LLM 或明確標示的 planning fixture 產生、驗證並排序三方案。A 保存 snapshot 後回傳 `status=ready`。只有明確未注入 planner 時才回不可選的 placeholder。
 5. 可透過 Google Maps Search URL 開啟地點。
 6. `POST /api/selections` 只接受 ready snapshot 的 `replan_id`／`plan_id`，在一次 runtime 原子更新中套用行程、將 Trip.version +1、保存選擇並更新偏好。
 
 天氣 adapter 已移至 A 的 `agent/weather.py` 並接入 context。預設 `WEATHER_MODE=mock` 使用具明確日期且涵蓋三日的 fixture；live 模式以 date range 呼叫 Open-Meteo，失敗時嘗試完整 fixture，仍不可用時標示 unavailable。API 以 `weather.source` 區分來源，並以 `start_date`／`end_date` 表示涵蓋區間；不把降雨機率當作大雨強度。
 
-Runtime JSON 會保存目前行程、偏好、snapshots 與冪等 selection responses，重啟後仍可讀取；沒有 HTTP 任意儲存或重置 endpoint。A 的外部 LLM 事件理解與 fallback 已完成；仍未接通 B 的 LLM 行程重排、天氣影響方案、可行性驗證與個人化排序，不能將 A 的 orchestration 與儲存完成視為完整 Demo。
+Runtime JSON 會保存目前行程、偏好、snapshots 與冪等 selection responses，重啟後仍可讀取；沒有 HTTP 任意儲存或重置 endpoint。A 的外部 LLM 事件理解與 fallback、B 的 LLM 行程重排／天氣影響方案／可行性驗證／個人化排序，以及兩者的 HTTP 與選擇交易整合皆已完成。推薦文字目前使用 deterministic fallback；規格要求的 A LLM 推薦說明仍待實作。
 
-## 核心流程（Demo 目標，尚未完整實作）
+## 核心流程
 
 1. 載入已保存的目前多日行程與使用者偏好，依 `scheduled_date` 分組顯示 timeline 與鎖定預約；首次使用才由固定種子初始化。
 2. 旅客輸入事件文字；前端送出 `trip_id`、`message` 與可選的 `now`（帶 offset 的 ISO8601），請求期間顯示 loading。前端依 Trip timezone 與完整日期時間標示現在／接下來的活動；套用成功後只顯示當下仍在進行及尚未開始的活動，後端仍保存並回傳完整 Trip。
@@ -47,7 +47,7 @@ Runtime JSON 會保存目前行程、偏好、snapshots 與冪等 selection resp
 | 空白、過長訊息、未知行程或未帶 offset 的 now | 目前 API 回傳 422；message 必須 1–2000 字且不可全空白，trip_id 僅接受 tokyo-demo |
 | 行程載入失敗、網路中斷或 API 失敗 | 顯示 error，允許重試；不得將失敗呈現為已套用成功 |
 | runtime JSON 損壞或讀寫失敗 | 目前 API 回傳 503，不以種子靜默覆蓋已保存資料 |
-| 事件或 planning LLM timeout／非法 JSON | 事件解析改用本機 parser 時加入 response warning；B 用盡重試／fallback 後丟出 `ReplannerUnavailableError`，A 回不含 provider 細節的 503；不直接使用未驗證內容 |
+| 事件或 planning LLM timeout／非法 JSON | 事件解析改用本機 parser 時加入 response warning；B 會有限重試並使用明確標示的 planning fixture，若仍不可用則 A 回不含 provider 細節的 503；不直接使用未驗證內容 |
 | 多日天氣 timeout、不完整或不可用 | 目前以 `weather.source` 與 warnings 明示 `fixture` 或 `unavailable`；date range 必須涵蓋要求的每個日期，不能冒充即時資料，也不能將未知天氣當晴天 |
 | 方案仍是 placeholder | 顯示警告，不開放套用 |
 | 無可行替代方案或預約限制無解 | 目標為明示不可行並禁止套用；不可為增加景點數解除預約鎖 |
@@ -72,10 +72,10 @@ Runtime JSON 會保存目前行程、偏好、snapshots 與冪等 selection resp
 - 選擇後可看到偏好原因與次數；相同選擇重送不重複計分，重啟後偏好仍存在。
 - 驗證空字串／未知行程 422、事件與 planning LLM 非法 JSON／timeout、天氣 timeout 與前端錯誤恢復。
 
-目前後端測試涵蓋 multi-day schema、API 契約、事件 LLM strict schema request、非法輸出／provider failure、本機 fallback、runtime JSON、多日天氣、placeholder、ready snapshot、選擇冪等、不可行與 stale 拒絕；B 的 planning LLM 跨日重排仍待完成驗收。
+目前後端測試涵蓋 multi-day schema、API 契約、事件 LLM strict schema request、非法輸出／provider failure、本機 fallback、runtime JSON、多日天氣、placeholder、ready snapshot、選擇冪等、不可行與 stale 拒絕，以及 B 的 Responses API payload、structured output、重試、fallback、跨日交換、鎖定限制、changes、impact/features 與偏好排序。
 
 ## 待確認事項
 
 - 外層 API 與 A/B module schema 已固定；若新增 `weather_override` 或欄位，必須視為契約變更，由 A/B/Frontend 共同確認並先更新文件／Pydantic。
-- Backend B 補下午戶外候選、交通時間、營業時間、最晚抵達資料與 planning fallback，使雨天替代、LLM 輸出驗證與可行性可離線測試。
-- 共同確認 unknown 事件的後續互動與完成活動判定；事件 LLM adapter 與 selection 的 404/409/503 語意已固定。
+- A 的 LLM 推薦文字說明尚未實作；啟用前須確認只送出 B 已驗證方案的必要摘要 facts，且 LLM 不得改動方案。
+- 共同確認 unknown 事件的後續互動與完成活動判定；事件 parser fallback 與 selection 的 404/409/503 語意已固定。

@@ -112,7 +112,7 @@ class Replanner(Protocol):
     async def generate_plans(self, context: ReplanContext, /) -> PlanningResult: ...
 ```
 
-此介面與 `ReplannerUnavailableError` 定義於 `backend/contracts.py`。B 用盡重試／fallback 後若仍無法提供方案，應丟出此例外；A 會回傳不含 provider 細節的 503 `ErrorResponse`。目前 `candidate_plans(...)` 只供未注入 B 實例時產生安全 placeholder；A 已在 `main.py` 建立 dependency boundary，取得 B 實例後呼叫 `Replanner.generate_plans`，不在 main 內加入排程邏輯。
+此介面與共用的 `ReplannerUnavailableError` 定義於 `backend/contracts.py`。B 已以 `LLMReplanner.generate_plans` 實作；A 在 `main.py` 的 application boundary 建立並注入該實例，不在 main 內加入排程邏輯。B 用盡重試／fallback 後若仍無法提供方案，A 會將共用例外或 B 的 replanner error 映射為不含 provider 細節的 503 `ErrorResponse`。`candidate_plans(...)` 只供明確未注入 planner 時產生安全 placeholder。
 
 ## Replan response 與 snapshot
 
@@ -129,7 +129,7 @@ class Replanner(Protocol):
 | `preference_insight` | string or null |
 | `warnings` | string[]；合併 context 與 replanner warnings |
 
-`ready` 必須有 `replan_id`，planning_source 不得為 unavailable；至少一個方案 feasible 時必須有 recommendation。`placeholder` 的 replan_id 必須為 null、planning_source 必須為 unavailable，不能提供可選 snapshot。未注入 B 實例時 `/api/replan` 回 placeholder；注入實例並取得有效 `PlanningResult` 後，A 先保存 snapshot 再回 ready。
+`ready` 必須有 `replan_id`，planning_source 不得為 unavailable；至少一個方案 feasible 時必須有 recommendation。`placeholder` 的 replan_id 必須為 null、planning_source 必須為 unavailable，不能提供可選 snapshot。正式 application boundary 預設注入 B；只有明確未注入實例時 `/api/replan` 才回 placeholder。取得有效 `PlanningResult` 後，A 先保存 snapshot 再回 ready。
 
 ### `ReplanSnapshot`（runtime internal）
 

@@ -1,0 +1,73 @@
+{
+  "scenarios": [
+    {
+      "trip_id": "tokyo-demo",
+      "start_date": "2026-09-12",
+      "end_date": "2026-09-14",
+      "event_type": "delay",
+      "plans": [
+        {
+          "id": "A",
+          "strategy": "preserve_booking",
+          "title": "保留預約：取消淺草寺",
+          "moves": {},
+          "cancels": ["item-1"],
+          "adds": []
+        },
+        {
+          "id": "B",
+          "strategy": "maximize_attractions",
+          "title": "保留景點：延後淺草寺",
+          "moves": {"item-1": ["2026-09-12", "11:00"]},
+          "cancels": ["item-2"],
+          "adds": []
+        },
+        {
+          "id": "C",
+          "strategy": "relaxed",
+          "title": "輕鬆出發：減少三個行程",
+          "moves": {},
+          "cancels": ["item-1", "item-2", "item-7"],
+          "adds": []
+        }
+      ]
+    },
+    {
+      "trip_id": "tokyo-demo",
+      "start_date": "2026-09-12",
+      "end_date": "2026-09-14",
+      "event_type": "weather",
+      "plans": [
+        {
+          "id": "A",
+          "strategy": "preserve_booking",
+          "title": "穩定優先：保留前兩天",
+          "moves": {},
+          "cancels": ["item-9"],
+          "adds": []
+        },
+        {
+          "id": "B",
+          "strategy": "maximize_attractions",
+          "title": "完整交換：迪士尼移至晴天",
+          "moves": {
+            "item-6": ["2026-09-14", "09:00"],
+            "item-7": ["2026-09-14", "11:00"],
+            "item-8": ["2026-09-14", "14:00"],
+            "item-9": ["2026-09-13", "09:00"]
+          },
+          "cancels": [],
+          "adds": []
+        },
+        {
+          "id": "C",
+          "strategy": "relaxed",
+          "title": "雨天放鬆：取消迪士尼與表參道",
+          "moves": {},
+          "cancels": ["item-7", "item-9"],
+          "adds": []
+        }
+      ]
+    }
+  ]
+}

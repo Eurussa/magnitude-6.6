@@ -18,9 +18,10 @@ SmartTrip 是一個 5 小時、三人協作的黑客松專案，協助自由行�
 
 ## Current stage
 
-- 已有 health/trip/preferences/replan/selections API、完整外層 Pydantic/OpenAPI schema、JSON fixture、前端串接、Google Maps link、多日事件 fallback、天氣 context 與 runtime JSON。
-- 未注入 Backend B replanner 時，Replan 仍回傳 `status: placeholder` 與沿用目前行程的三方案，不能視為可執行的重排。
-- Backend A 已完成 B Protocol 注入、snapshot 與 selection 原子交易；尚未接通外部 LLM 事件解析及 B 的真正跨日重排。
+- 已有 health/trip/preferences/replan/selections API、完整外層 Pydantic/OpenAPI schema、JSON fixture、前端多日流程與 Google Maps link。
+- Backend A 已完成事件 LLM structured output／本機 fallback、天氣 context、runtime snapshot、selection 原子交易與 deterministic 推薦說明 fallback。
+- Backend B 已完成 `LLMReplanner`、planning structured output、限制驗證、impact/features、排序、重試與離線 fixture；`main.py` 已在 application boundary 注入 B，Replan 預設回傳 live 或 fixture 的 `ready` 結果。
+- 依規格 A 的 LLM 推薦文字說明仍待實作；啟用前須確認只傳送已驗證方案的必要摘要 facts。
 - 技術棧與責任邊界整理於 `docs/decisions/`；003–006 已固定 selection、多日與 LLM replanning 契約。
 
 ## Stack and development commands
@@ -32,7 +33,7 @@ SmartTrip 是一個 5 小時、三人協作的黑客松專案，協助自由行�
 - 在 `frontend/` 執行 `pnpm install --frozen-lockfile`、`pnpm dev`；Vite :5173 將 `/api` proxy 至 FastAPI :8000。
 - 前端檢查：在 `frontend/` 執行 `pnpm lint`、`pnpm build`。
 - 後端檢查：在 repo 根目錄、啟用 virtualenv 後執行 `python -m unittest discover -s backend/tests -v`。
-- `.env` 位於 repo 根目錄，預設 mock 模式不需金鑰；LLM 金鑰只放後端，不使用 `VITE_` 變數傳給瀏覽器。
+- Agent 與 Backend B 共用 repo 根目錄 `.env` 的 `LLM_` 設定；Backend B 直接讀該檔案或同名 process environment。真實 `.env` 不提交，金鑰不使用 `VITE_` 變數傳給瀏覽器。
 
 ## Working agreements
 

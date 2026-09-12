@@ -15,7 +15,7 @@
 | [005 LLM-driven 行程重排與偏好排序](005-llm-driven-replanning.md) | Accepted | B 的 planning LLM、structured output 驗證與 deterministic preference scoring |
 | [006 Multi-day Trip、Event 與 Weather schema](006-multi-day-trip-schema.md) | Accepted | 多日日期模型、跨日事件／方案、多日天氣與 runtime version 2 |
 
-技術選型、contract 狀態與實作進度分開記錄；LLM 的事件解析、推薦說明、行程重排責任及外層 schema 已確定，provider/model 由 server-side `.env` 設定。Backend A 已完成事件 structured output／明確 fallback warning、replanner 503 邊界、deterministic 說明 fallback、snapshot 與 selection 交易；A 的 LLM 推薦說明及 B 的真正跨日重排仍待接通。Frontend owner 需依 [API 契約](../api-contract.md) 同步 types。
+技術選型、contract 狀態與實作進度分開記錄；LLM 的事件解析、推薦說明、行程重排責任及外層 schema 已確定，provider/model 由 server-side `.env` 設定。Backend A 已完成事件 structured output／明確 fallback warning、replanner 503 邊界、deterministic 說明 fallback、snapshot 與 selection 交易；Backend B 已使用可設定的 OpenAI Responses API（預設 model `gpt-5.4-mini`）完成重排模組，並已由 `main.py` 串接。Frontend 已依 [API 契約](../api-contract.md) 同步 types。A 的 LLM 推薦說明仍待實作。
 
 ## 維護方式
 

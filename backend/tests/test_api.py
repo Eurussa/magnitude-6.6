@@ -13,6 +13,7 @@ from backend.contracts import ReplannerUnavailableError
 from backend.llm import LLMProviderError
 from backend.main import app, get_replanner, get_store
 from backend.models import PlanningResult, ReplanContext
+from backend.replanner import LLMReplanner, ReplannerSettings
 from backend.replanner.planner import candidate_plans
 
 
@@ -66,6 +67,7 @@ class ApiTest(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.store = RuntimeStore(Path(self.temp.name))
         app.dependency_overrides[get_store] = lambda: self.store
+        app.dependency_overrides[get_replanner] = lambda: None
         self.addCleanup(app.dependency_overrides.clear)
         self.enterContext(patch.dict(os.environ, {
             "WEATHER_MODE": "mock",
@@ -246,6 +248,24 @@ class ApiTest(unittest.TestCase):
         })
         self.assertNotIn("provider-secret-detail", response.text)
         self.assertEqual(self.store.load_state().replan_snapshots, {})
+
+    def test_fixture_replanner_is_integrated_with_ready_snapshot(self):
+        replanner = LLMReplanner.from_settings(ReplannerSettings(mode="fixture"))
+        app.dependency_overrides[get_replanner] = lambda: replanner
+
+        response = self.client.post("/api/replan", json={
+            "message": "睡過頭兩小時",
+            "now": "2026-09-12T09:00:00+09:00",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "ready")
+        self.assertEqual(data["planning_source"], "fixture")
+        self.assertIsNotNone(data["replan_id"])
+        self.assertEqual({plan["id"] for plan in data["plans"]}, {"A", "B", "C"})
+        self.assertTrue(any("fixture" in warning for warning in data["warnings"]))
+        self.assertIn(data["replan_id"], self.store.load_state().replan_snapshots)
 
     def test_invalid_request(self):
         for payload in ({"message": ""}, {"message": "   "},

@@ -30,6 +30,8 @@ from .models import (
     SelectionResponse,
     Trip,
 )
+from .replanner import LLMReplanner
+from .replanner.errors import ReplannerError
 from .replanner.planner import candidate_plans
 
 ROOT = Path(__file__).resolve().parent
@@ -41,7 +43,7 @@ app.add_middleware(CORSMiddleware,
 
 
 _store = RuntimeStore()  # Constructing the shared store does not read or write files.
-_replanner: Replanner | None = None
+_replanner: Replanner | None = LLMReplanner.from_settings()
 
 
 def get_store() -> RuntimeStore:
@@ -49,7 +51,7 @@ def get_store() -> RuntimeStore:
 
 
 def get_replanner() -> Replanner | None:
-    """Return B's configured implementation; None keeps the safe placeholder path."""
+    """Return B's app-scoped implementation; None keeps the safe test fallback."""
     return _replanner
 
 
@@ -95,7 +97,7 @@ async def replan(
     if replanner is not None:
         try:
             result = await replanner.generate_plans(context)
-        except (LLMProviderError, ReplannerUnavailableError) as exc:
+        except (LLMProviderError, ReplannerError, ReplannerUnavailableError) as exc:
             raise HTTPException(
                 status_code=503,
                 detail="重排行程服務暫時無法使用，請稍後重試。",
