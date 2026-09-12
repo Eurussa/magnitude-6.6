@@ -1,7 +1,8 @@
-"""Backend B owns feasibility checks, impact, features and preference ranking.
-Never move booking=true or movable=false items silently.
-Use fixture travel minutes, check overlaps, flag infeasible candidates.
-Receive typed preferences and weather from A; do not read/write runtime data,
-fetch external weather, or generate user-facing recommendation explanations here.
-Implementation is intentionally left to Backend B.
+"""Backend B owns plan validation, impact, features and preference ranking.
+
+The planning LLM generates candidate itineraries. This module derives or validates
+their comparable facts and applies deterministic preference scoring so repeated
+inputs have a stable order. Raw scores remain internal; callers receive ordered
+plans and a recommended plan id. Runtime, weather fetching, and user-facing
+recommendation explanations remain outside this module.
 """

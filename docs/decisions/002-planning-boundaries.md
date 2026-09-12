@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted — 整理自 [DEVELOPMENT_SPEC.md](../DEVELOPMENT_SPEC.md) 的架構、排程規則與分工；多數目標能力尚未實作。
+Superseded in part — 整理自 [DEVELOPMENT_SPEC.md](../DEVELOPMENT_SPEC.md) 的架構、排程規則與分工；多數目標能力尚未實作。
 
-天氣 ownership 與初始化介面：Superseded by [ADR 004](004-backend-boundaries-runtime-json.md)（2026-09-12）。目前由 A 的 `agent/weather.py` 取得並整理天氣，已串入 context；B 接收 event / weather / preferences / now，排程仍為 placeholder。下方舊分工與未串接敘述保留為歷史；其餘排程原則仍為 Accepted。
+天氣 ownership 與初始化介面由 [ADR 004](004-backend-boundaries-runtime-json.md) 取代；deterministic heuristic 與「LLM 不產生行程」由 [ADR 005](005-llm-driven-replanning.md) 取代。目前由 A 的 `agent/weather.py` 取得並整理天氣，B 接收完整 context 並負責呼叫 planning LLM。下方舊決策保留為歷史，不代表現行實作方向。
 
 ## Context
 

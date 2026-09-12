@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 整理自 [DEVELOPMENT_SPEC.md](../DEVELOPMENT_SPEC.md) 的 Tech Stack 與架構；pnpm 指令依目前專案設定與協作規則。
+Accepted — 整理自 [DEVELOPMENT_SPEC.md](../DEVELOPMENT_SPEC.md) 的 Tech Stack 與架構；pnpm 指令依目前專案設定與協作規則。固定單日 MVP 的範圍已由 [ADR 006](006-multi-day-trip-schema.md) 取代。
 
 儲存選項：Superseded by [ADR 004](004-backend-boundaries-runtime-json.md)（2026-09-12），目前使用 runtime JSON、不使用 DB。下方 SQLite 敘述保留為決策歷史；其餘技術棧仍為 Accepted。
 
@@ -24,4 +24,4 @@ Accepted — 整理自 [DEVELOPMENT_SPEC.md](../DEVELOPMENT_SPEC.md) 的 Tech St
 - Frontend 與兩位 Backend owner 透過 HTTP API、Pydantic 與 TypeScript types 協作；共用 schema 由 Backend A 整合。
 - 本機須啟動前後端；開發與驗證指令見 [AGENTS.md](../../AGENTS.md) 及 [README.md](../../README.md)。
 - 目前已有初始化串接，技術棧確定不代表完整重排與偏好功能已完成。
-- 正式 hosting、登入、多使用者與多日最佳化留在 MVP 範圍外，不能從此紀錄推定部署方案。
+- 正式 hosting、登入、多使用者、跨城市與任意長期規劃留在 MVP 範圍外，不能從此紀錄推定部署方案；多日 Trip schema 依 ADR 006。

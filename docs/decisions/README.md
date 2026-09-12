@@ -4,23 +4,25 @@
 
 ## 目前決策
 
-以下依 [DEVELOPMENT_SPEC.md](../DEVELOPMENT_SPEC.md) 整理，不代表相關功能皆已實作。規格已明確採用的技術與架構標為 Accepted；仍要求三人共同確認的 API 增量標為 Proposed。
+以下依 [DEVELOPMENT_SPEC.md](../DEVELOPMENT_SPEC.md) 整理，不代表相關功能皆已實作。規格已明確採用的技術、架構與外層契約標為 Accepted。
 
 | 紀錄 | Status | 範圍 |
 |---|---|---|
-| [001 Frontend 與 Backend 技術棧](001-technology-stack.md) | Accepted；儲存選項由 004 取代 | React SPA、FastAPI、執行環境、套件管理與 MVP 排除項目 |
-| [002 事件解析、排程與外部資料邊界](002-planning-boundaries.md) | Accepted；天氣分工／介面由 004 取代 | 單一 server、LLM 驗證、deterministic heuristic、天氣與地圖 fixture |
-| [003 重排、選擇與偏好契約增量](003-replan-selection-contract.md) | Proposed | ready/feasible、snapshot、選擇冪等、權重更新與持久化 |
-| [004 Backend 分工與 runtime JSON](004-backend-boundaries-runtime-json.md) | Accepted | A context／weather／儲存與 B 排程邊界、單 worker 原子 JSON、已完成與待實作介面 |
+| [001 Frontend 與 Backend 技術棧](001-technology-stack.md) | Accepted；儲存由 004、單日範圍由 006 取代 | React SPA、FastAPI、執行環境、套件管理與 MVP 排除項目 |
+| [002 事件解析、排程與外部資料邊界](002-planning-boundaries.md) | Superseded in part；天氣由 004、LLM 重排由 005 取代 | 舊排程邊界、天氣與地圖 fixture |
+| [003 重排、選擇與偏好契約增量](003-replan-selection-contract.md) | Accepted；selection 實作 pending | ready/feasible、snapshot、Trip version、選擇冪等、權重更新與持久化 |
+| [004 Backend 分工與 runtime JSON](004-backend-boundaries-runtime-json.md) | Accepted；B 排程由 005、runtime schema version 1 由 006 取代 | A context／weather／儲存與 B 排程邊界、單 worker 原子 JSON、已完成與待實作介面 |
+| [005 LLM-driven 行程重排與偏好排序](005-llm-driven-replanning.md) | Accepted | B 的 planning LLM、structured output 驗證與 deterministic preference scoring |
+| [006 Multi-day Trip、Event 與 Weather schema](006-multi-day-trip-schema.md) | Accepted | 多日日期模型、跨日事件／方案、多日天氣與 runtime version 2 |
 
-技術選型狀態與實作進度分開記錄；例如 LLM 的職責已確定，但 provider/model 尚未選定，真正解析仍未實作。目標契約確認後，由 owner 同步規格、Pydantic、Frontend types 與對應 ADR 狀態。
+技術選型、contract 狀態與實作進度分開記錄；LLM 的事件解析、行程重排責任及外層 schema 已確定，但 provider/model 尚未選定，真正解析、重排、snapshot 與 selection 交易仍未實作。Frontend owner 需依 [API 契約](../api-contract.md) 同步 types。
 
 ## 維護方式
 
 - 重要變更新增 ADR，或補充尚未確認的 Proposed 紀錄；不可把討論中的方案直接標為 Accepted。
 - Accepted 的決策被替換時保留原紀錄、標為 Superseded，並連結新的 ADR。
 - 產品流程與資料關係分別同步 [product-flow.md](../product-flow.md) 與 [domain-model.md](../domain-model.md)。
-- API schema 由 Backend A 整合；目前可執行契約以 `/openapi.json`、`/docs` 為準，目標契約以開發規格標示。
+- API schema 由 Backend A 整合；固定契約見 `docs/api-contract.md`，可執行契約以 `/openapi.json`、`/docs` 為準。
 
 ## 檔名格式
 

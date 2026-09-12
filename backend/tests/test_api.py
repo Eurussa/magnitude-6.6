@@ -3,6 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
@@ -23,20 +24,108 @@ class ApiTest(unittest.TestCase):
 
     def test_health_and_trip(self):
         self.assertEqual(self.client.get("/api/health").json(), {"status": "ok"})
-        self.assertEqual(len(self.client.get("/api/trip").json()["items"]), 5)
+        trip = self.client.get("/api/trip").json()
+        self.assertEqual(trip["start_date"], "2026-09-12")
+        self.assertEqual(trip["end_date"], "2026-09-14")
+        self.assertEqual(trip["version"], 1)
+        self.assertEqual(len(trip["items"]), 9)
+        self.assertEqual(
+            {item["scheduled_date"] for item in trip["items"]},
+            {"2026-09-12", "2026-09-13", "2026-09-14"},
+        )
 
     def test_health_does_not_create_runtime(self):
         self.assertEqual(self.client.get("/api/health").status_code, 200)
         self.assertFalse(self.store.path.exists())
 
+    def test_openapi_exposes_multi_day_contract(self):
+        schemas = self.client.get("/openapi.json").json()["components"]["schemas"]
+        self.assertIn("start_date", schemas["Trip"]["properties"])
+        self.assertIn("end_date", schemas["Trip"]["properties"])
+        self.assertIn("version", schemas["Trip"]["properties"])
+        self.assertIn("scheduled_date", schemas["TripItem"]["properties"])
+        self.assertIn("affected_dates", schemas["Event"]["properties"])
+        self.assertIn("affected_item_ids", schemas["Event"]["properties"])
+        self.assertIn("start_date", schemas["WeatherContext"]["properties"])
+        self.assertIn("end_date", schemas["WeatherContext"]["properties"])
+        self.assertNotIn("date", schemas["WeatherContext"]["properties"])
+
+    def test_openapi_exposes_complete_replan_and_selection_contracts(self):
+        document = self.client.get("/openapi.json").json()
+        schemas = document["components"]["schemas"]
+        for schema in (
+            "HealthResponse",
+            "PlanChange",
+            "PlanFeatures",
+            "ReplanResponse",
+            "SelectionRequest",
+            "SelectionResponse",
+            "ErrorResponse",
+        ):
+            self.assertIn(schema, schemas)
+
+        replan_properties = schemas["ReplanResponse"]["properties"]
+        for field in (
+            "replan_id",
+            "planning_source",
+            "recommended_plan_id",
+            "preference_insight",
+        ):
+            self.assertIn(field, replan_properties)
+
+        plan_properties = schemas["Plan"]["properties"]
+        for field in (
+            "feasible",
+            "changes",
+            "additional_travel_minutes",
+            "additional_cost_jpy",
+            "booking_warnings",
+            "features",
+        ):
+            self.assertIn(field, plan_properties)
+        self.assertEqual(set(schemas["Plan"]["required"]), set(plan_properties))
+
+        replan_required = set(schemas["ReplanResponse"]["required"])
+        self.assertEqual(replan_required, set(replan_properties))
+
+        change_properties = schemas["PlanChange"]["properties"]
+        self.assertEqual(set(schemas["PlanChange"]["required"]), set(change_properties))
+        for schema_name in (
+            "Event",
+            "HealthResponse",
+            "PlanFeatures",
+            "Preference",
+            "PreferenceWeights",
+            "Trip",
+            "TripItem",
+            "WeatherContext",
+            "WeatherHour",
+        ):
+            schema = schemas[schema_name]
+            self.assertEqual(set(schema["required"]), set(schema["properties"]))
+
+        selection = document["paths"]["/api/selections"]["post"]
+        self.assertEqual(
+            set(selection["responses"]),
+            {"200", "404", "409", "422", "501", "503"},
+        )
+
     def test_replan_contract_and_booking_preservation(self):
-        result = self.client.post("/api/replan", json={"message": "下午下大雨"})
+        result = self.client.post("/api/replan", json={
+            "message": "後天迪士尼會下大雨",
+            "now": "2026-09-12T09:00:00+09:00",
+        })
         self.assertEqual(result.status_code, 200)
         data = result.json()
         self.assertEqual(data["status"], "placeholder")
+        self.assertIsNone(data["replan_id"])
+        self.assertEqual(data["planning_source"], "unavailable")
+        self.assertIsNone(data["recommended_plan_id"])
         self.assertEqual(len(data["plans"]), 3)
         self.assertTrue(data["warnings"])
         self.assertEqual(data["weather"]["source"], "fixture")
+        self.assertEqual(data["weather"]["start_date"], "2026-09-12")
+        self.assertEqual(data["weather"]["end_date"], "2026-09-14")
         self.assertEqual(data["preferences"]["selection_count"], 0)
         original = self.client.get("/api/trip").json()["items"]
         for plan in data["plans"]:
@@ -45,7 +134,8 @@ class ApiTest(unittest.TestCase):
 
     def test_invalid_request(self):
         for payload in ({"message": ""}, {"message": "   "},
-                        {"message": "test", "trip_id": "missing"}):
+                        {"message": "test", "trip_id": "missing"},
+                        {"message": "test", "unexpected": True}):
             self.assertEqual(self.client.post("/api/replan", json=payload).status_code, 422)
 
     def test_now_requires_timezone_offset(self):
@@ -74,7 +164,8 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(context["event"].summary, "下午下雨")
         self.assertEqual(context["preferences"], preferences)
         self.assertEqual(context["now"].isoformat(), "2026-09-13T00:30:00+09:00")
-        self.assertEqual(context["weather"].date.isoformat(), "2026-09-13")
+        self.assertEqual(context["weather"].start_date.isoformat(), "2026-09-13")
+        self.assertEqual(context["weather"].end_date.isoformat(), "2026-09-14")
         self.assertEqual(self.client.get("/api/preferences").json(),
                          preferences.model_dump(mode="json"))
         self.assertEqual(self.client.get("/api/trip").json(), trip.model_dump(mode="json"))
@@ -86,9 +177,23 @@ class ApiTest(unittest.TestCase):
         self.store.path.write_bytes(contents)
         for endpoint in ("/api/trip", "/api/preferences"):
             self.assertEqual(self.client.get(endpoint).status_code, 503)
-        self.assertEqual(self.client.post("/api/replan", json={"message": "下雨"}).status_code, 503)
+        response = self.client.post("/api/replan", json={"message": "下雨"})
+        self.assertEqual(response.status_code, 503)
         self.assertEqual(self.store.path.read_bytes(), contents)
 
-    def test_selection_is_not_exposed_for_placeholder_plans(self):
-        response = self.client.post("/api/selections", json={"replan_id": "x", "plan_id": "A"})
-        self.assertEqual(response.status_code, 404)
+    def test_selection_contract_is_exposed_but_not_implemented(self):
+        invalid = self.client.post(
+            "/api/selections", json={"replan_id": "x", "plan_id": "A"},
+        )
+        self.assertEqual(invalid.status_code, 422)
+        invalid_plan = self.client.post(
+            "/api/selections",
+            json={"replan_id": str(uuid4()), "plan_id": "D"},
+        )
+        self.assertEqual(invalid_plan.status_code, 422)
+
+        response = self.client.post(
+            "/api/selections", json={"replan_id": str(uuid4()), "plan_id": "A"},
+        )
+        self.assertEqual(response.status_code, 501)
+        self.assertIn("尚未實作", response.json()["detail"])

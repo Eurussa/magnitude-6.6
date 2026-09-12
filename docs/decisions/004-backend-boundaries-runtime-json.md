@@ -2,9 +2,9 @@
 
 ## Status
 
-Accepted — 2026-09-12
+Accepted — 2026-09-12；其中 Backend B 的 deterministic replanning 與「不呼叫 LLM」決策已由 [ADR 005](005-llm-driven-replanning.md) 取代，單日 Trip 與 runtime schema version 1 已由 [ADR 006](006-multi-day-trip-schema.md) 取代。天氣 ownership、runtime JSON 與其餘責任邊界仍有效。
 
-取代 [ADR 001](001-technology-stack.md) 中的 SQLite 儲存選項，以及 [ADR 002](002-planning-boundaries.md) 的天氣 ownership／初始化進度敘述；其餘技術棧與排程原則維持有效。[ADR 003](003-replan-selection-contract.md) 的選擇與學習契約仍為 Proposed，已完成的 context／儲存基礎以本紀錄及現行 schema 為準。
+取代 [ADR 001](001-technology-stack.md) 中的 SQLite 儲存選項，以及 [ADR 002](002-planning-boundaries.md) 的天氣 ownership／初始化進度敘述；排程方式後續由 ADR 005 更新。[ADR 003](003-replan-selection-contract.md) 已固定選擇與學習的外層契約，已完成的 context／儲存基礎以本紀錄及現行 schema 為準。
 
 ## Context
 
@@ -21,7 +21,7 @@ Accepted — 2026-09-12
 - 可變資料集中於 `backend/data/runtime/state.json`，目前含 `schema_version=1`、`trip`、`preferences`。A 的 RuntimeStore 在首次讀取時由種子初始化；後續驗證並讀寫 runtime，不覆寫種子。
 - 每次狀態更新先完整寫入同目錄暫存檔、fsync，再以原子 replace 取代狀態檔，單程序鎖保護 read-modify-write；失敗時報錯，不靜默重置資料。
 - 只部署單一 worker。鎖定方式不支援多程序並行寫入，也不宣稱具有跨服務資料庫交易保證。runtime 不納入 Git；開發／Demo 重置須先停止服務，再移除自己的 runtime 狀態，下次讀取由種子初始化。
-- 未來選擇流程使用 `/api/selections` 與 `replan_id` / `plan_id`。伺服器保存候選 snapshot 後才接受選擇，套用行程、偏好與選擇紀錄須在同次 runtime 更新完成；相同選擇不得重複加分。此次未實作此 endpoint、snapshot 或學習迴圈，後續需擴充 state schema。
+- 選擇流程使用 `/api/selections` 與 `replan_id` / `plan_id`。伺服器保存候選 snapshot 後才接受選擇，套用行程、偏好與選擇紀錄須在同次 runtime 更新完成；相同選擇不得重複加分。Route 與 schema 已註冊但目前回 501；snapshot、交易與學習迴圈尚未實作，後續需擴充 state schema。
 
 ## Consequences
 

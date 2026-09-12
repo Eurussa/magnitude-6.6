@@ -1,11 +1,15 @@
 {
   "id": "tokyo-demo",
+  "version": 1,
   "city": "Tokyo",
   "timezone": "Asia/Tokyo",
+  "start_date": "2026-09-12",
+  "end_date": "2026-09-14",
   "items": [
     {
       "id": "item-1",
       "name": "淺草寺",
+      "scheduled_date": "2026-09-12",
       "start_time": "09:00",
       "duration_minutes": 60,
       "latitude": 35.7148,
@@ -18,6 +22,7 @@
     {
       "id": "item-2",
       "name": "東京國立博物館",
+      "scheduled_date": "2026-09-12",
       "start_time": "11:00",
       "duration_minutes": 60,
       "latitude": 35.7188,
@@ -30,6 +35,7 @@
     {
       "id": "item-3",
       "name": "午餐",
+      "scheduled_date": "2026-09-12",
       "start_time": "13:00",
       "duration_minutes": 60,
       "latitude": 35.71,
@@ -42,6 +48,7 @@
     {
       "id": "item-4",
       "name": "teamLab",
+      "scheduled_date": "2026-09-12",
       "start_time": "15:00",
       "duration_minutes": 90,
       "latitude": 35.649,
@@ -54,6 +61,7 @@
     {
       "id": "item-5",
       "name": "晚餐",
+      "scheduled_date": "2026-09-12",
       "start_time": "19:00",
       "duration_minutes": 60,
       "latitude": 35.671,
@@ -62,6 +70,58 @@
       "booking": true,
       "movable": false,
       "indoor": true
+    },
+    {
+      "id": "item-6",
+      "name": "明治神宮",
+      "scheduled_date": "2026-09-13",
+      "start_time": "09:00",
+      "duration_minutes": 90,
+      "latitude": 35.6764,
+      "longitude": 139.6993,
+      "priority": 3,
+      "booking": false,
+      "movable": true,
+      "indoor": false
+    },
+    {
+      "id": "item-7",
+      "name": "原宿・表參道",
+      "scheduled_date": "2026-09-13",
+      "start_time": "11:30",
+      "duration_minutes": 150,
+      "latitude": 35.6695,
+      "longitude": 139.7055,
+      "priority": 3,
+      "booking": false,
+      "movable": true,
+      "indoor": false
+    },
+    {
+      "id": "item-8",
+      "name": "澀谷",
+      "scheduled_date": "2026-09-13",
+      "start_time": "15:00",
+      "duration_minutes": 180,
+      "latitude": 35.6595,
+      "longitude": 139.7005,
+      "priority": 4,
+      "booking": false,
+      "movable": true,
+      "indoor": false
+    },
+    {
+      "id": "item-9",
+      "name": "東京迪士尼樂園",
+      "scheduled_date": "2026-09-14",
+      "start_time": "09:00",
+      "duration_minutes": 600,
+      "latitude": 35.6329,
+      "longitude": 139.8804,
+      "priority": 5,
+      "booking": false,
+      "movable": true,
+      "indoor": false
     }
   ]
 }

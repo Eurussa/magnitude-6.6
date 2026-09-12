@@ -1,4 +1,4 @@
-"""Backend A assembles external context before calling the deterministic planner."""
+"""Backend A assembles validated context before calling the LLM-driven replanner."""
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -13,7 +13,7 @@ async def build_context(request: ReplanRequest, store: RuntimeStore) -> ReplanCo
     state = store.load_state()
     timezone = ZoneInfo(state.trip.timezone)
     now = request.now.astimezone(timezone) if request.now else datetime.now(timezone)
-    event = parse_event(request.message)
+    event = parse_event(request.message, trip=state.trip, now=now)
     weather = await get_weather(state.trip, now=now)
     return ReplanContext(trip=state.trip, event=event, weather=weather,
                          preferences=state.preferences, now=now)

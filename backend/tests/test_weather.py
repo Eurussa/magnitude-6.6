@@ -23,28 +23,58 @@ class WeatherTest(unittest.IsolatedAsyncioTestCase):
             weather = await get_weather(self.trip, now=self.now)
         fetch.assert_not_called()
         self.assertEqual(weather.source, "fixture")
-        self.assertEqual(weather.date, date(2026, 9, 13))
+        self.assertEqual(weather.start_date, date(2026, 9, 13))
+        self.assertEqual(weather.end_date, date(2026, 9, 14))
         self.assertEqual(weather.timezone, "Asia/Tokyo")
         self.assertTrue(weather.warnings)
-        self.assertTrue(all(hour.time.date() == weather.date for hour in weather.hours))
+        self.assertEqual(
+            {hour.time.date() for hour in weather.hours},
+            {date(2026, 9, 13), date(2026, 9, 14)},
+        )
+
+    async def test_fixture_marks_disney_day_as_rainier_than_swap_day(self):
+        with patch.dict(os.environ, {"WEATHER_MODE": "mock"}):
+            weather = await get_weather(self.trip, now=self.now)
+        probabilities = {
+            day: [
+                hour.precipitation_probability
+                for hour in weather.hours
+                if hour.time.date() == day
+            ]
+            for day in (date(2026, 9, 13), date(2026, 9, 14))
+        }
+        self.assertLess(max(probabilities[date(2026, 9, 13)]), 50)
+        self.assertGreaterEqual(min(probabilities[date(2026, 9, 14)]), 50)
 
     async def test_live_adapter_normalizes_provider_shape_and_preserves_unknown(self):
         def forecast(request):
             self.assertEqual(request.url.params["start_date"], "2026-09-13")
-            self.assertEqual(request.url.params["end_date"], "2026-09-13")
+            self.assertEqual(request.url.params["end_date"], "2026-09-14")
             self.assertEqual(request.url.params["timezone"], "Asia/Tokyo")
             return httpx.Response(200, json={"hourly": {
-                "time": ["2026-09-13T14:00", "2026-09-13T15:00"],
-                "precipitation_probability": [90, None],
+                "time": [
+                    "2026-09-13T14:00",
+                    "2026-09-13T15:00",
+                    "2026-09-14T14:00",
+                ],
+                "precipitation_probability": [20, None, 90],
             }})
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(forecast))
         with patch("backend.agent.weather.httpx.AsyncClient", return_value=client):
-            weather = await fetch_weather(35.7, 139.7, timezone="Asia/Tokyo", day=date(2026, 9, 13))
+            weather = await fetch_weather(
+                35.7,
+                139.7,
+                timezone="Asia/Tokyo",
+                start_date=date(2026, 9, 13),
+                end_date=date(2026, 9, 14),
+            )
         self.assertEqual(weather.source, "live")
         self.assertEqual(weather.hours[0].time.isoformat(), "2026-09-13T14:00:00+09:00")
-        self.assertEqual(weather.hours[0].precipitation_probability, 90)
+        self.assertEqual(weather.hours[0].precipitation_probability, 20)
         self.assertIsNone(weather.hours[1].precipitation_probability)
+        self.assertEqual(weather.hours[2].time.isoformat(), "2026-09-14T14:00:00+09:00")
+        self.assertEqual(weather.hours[2].precipitation_probability, 90)
 
     async def test_timeout_falls_back_with_explicit_source(self):
         with patch.dict(os.environ, {"WEATHER_MODE": "live"}), \
@@ -62,6 +92,7 @@ class WeatherTest(unittest.IsolatedAsyncioTestCase):
             {"hourly": {"time": ["2026-09-12T14:00"], "precipitation_probability": [90]}},
             {"hourly": {"time": ["2026-09-13T14:00"], "precipitation_probability": [101]}},
             {"hourly": {"time": ["2026-09-13T14:00"], "precipitation_probability": [None]}},
+            {"hourly": {"time": ["2026-09-13T14:00"], "precipitation_probability": [20]}},
         ]
         for payload in invalid_responses:
             with self.subTest(payload=payload):

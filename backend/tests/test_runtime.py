@@ -45,6 +45,7 @@ class RuntimeStoreTest(unittest.TestCase):
 
         state = self.store.load_state()
 
+        self.assertEqual(state.schema_version, 2)
         self.assertEqual(state.trip, Trip.model_validate_json(self.seed_bytes["trip.json"]))
         self.assertEqual(state.preferences,
                          Preference.model_validate_json(self.seed_bytes["preferences.json"]))
@@ -85,11 +86,21 @@ class RuntimeStoreTest(unittest.TestCase):
     def test_invalid_or_unsupported_state_is_preserved_on_reads_and_writes(self):
         original = self.store.load_state()
         valid_data = original.model_dump(mode="json")
-        unsupported = dict(valid_data, schema_version=2)
+        unsupported = dict(valid_data, schema_version=3)
         invalid_preferences = dict(valid_data, preferences={"selection_count": -1})
         invalid_timezone = dict(valid_data, trip=dict(valid_data["trip"], timezone="Bad/Timezone"))
-        cases = (b"{broken json", b"{}", json.dumps(unsupported).encode(),
-                 json.dumps(invalid_preferences).encode(), json.dumps(invalid_timezone).encode())
+        invalid_dates = dict(
+            valid_data,
+            trip=dict(valid_data["trip"], end_date="2026-09-01"),
+        )
+        cases = (
+            b"{broken json",
+            b"{}",
+            json.dumps(unsupported).encode(),
+            json.dumps(invalid_preferences).encode(),
+            json.dumps(invalid_timezone).encode(),
+            json.dumps(invalid_dates).encode(),
+        )
         operations = (
             self.store.load_state,
             lambda: self.store.save_trip(original.trip),
