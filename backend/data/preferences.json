@@ -1,0 +1,9 @@
+{
+  "user_id": "demo-user",
+  "weights": {
+    "preserve_booking": 1,
+    "maximize_attractions": 1,
+    "relaxed": 1
+  },
+  "selection_count": 0
+}

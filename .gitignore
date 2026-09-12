@@ -1,0 +1,15 @@
+# Local configuration / secrets
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.sqlite*
+backend/data/runtime/
+.DS_Store
+*.log

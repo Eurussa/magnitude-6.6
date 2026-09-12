@@ -1,0 +1,67 @@
+{
+  "id": "tokyo-demo",
+  "city": "Tokyo",
+  "timezone": "Asia/Tokyo",
+  "items": [
+    {
+      "id": "item-1",
+      "name": "淺草寺",
+      "start_time": "09:00",
+      "duration_minutes": 60,
+      "latitude": 35.7148,
+      "longitude": 139.7967,
+      "priority": 3,
+      "booking": false,
+      "movable": true,
+      "indoor": false
+    },
+    {
+      "id": "item-2",
+      "name": "東京國立博物館",
+      "start_time": "11:00",
+      "duration_minutes": 60,
+      "latitude": 35.7188,
+      "longitude": 139.7765,
+      "priority": 3,
+      "booking": false,
+      "movable": true,
+      "indoor": true
+    },
+    {
+      "id": "item-3",
+      "name": "午餐",
+      "start_time": "13:00",
+      "duration_minutes": 60,
+      "latitude": 35.71,
+      "longitude": 139.777,
+      "priority": 5,
+      "booking": true,
+      "movable": false,
+      "indoor": true
+    },
+    {
+      "id": "item-4",
+      "name": "teamLab",
+      "start_time": "15:00",
+      "duration_minutes": 90,
+      "latitude": 35.649,
+      "longitude": 139.789,
+      "priority": 5,
+      "booking": true,
+      "movable": false,
+      "indoor": true
+    },
+    {
+      "id": "item-5",
+      "name": "晚餐",
+      "start_time": "19:00",
+      "duration_minutes": 60,
+      "latitude": 35.671,
+      "longitude": 139.765,
+      "priority": 5,
+      "booking": true,
+      "movable": false,
+      "indoor": true
+    }
+  ]
+}
