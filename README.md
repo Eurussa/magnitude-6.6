@@ -10,7 +10,7 @@ Sea x OpenAI Taiwan Hackathon 2026
 
 ### 環境與啟動
 
-需要 Node.js 22.12+（`.nvmrc` 指定 22）、npm、Python 3.11+。
+需要 Node.js 22.12+（`.nvmrc` 指定 22）、pnpm 11+、Python 3.11+。
 
 在 repository 根目錄：
 
@@ -26,8 +26,8 @@ python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000
 
 ```sh
 cd frontend
-npm ci
-npm run dev
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
 開啟 http://localhost:5173；API 文件 http://127.0.0.1:8000/docs。
@@ -42,8 +42,8 @@ Vite 將 `/api` 轉送至 8000；production build 僅產生靜態檔，正式 ho
 python -m unittest discover -s backend/tests -v
 # frontend
 cd frontend
-npm run build
-npm run lint
+pnpm build
+pnpm lint
 ```
 
 ```sh

@@ -108,7 +108,7 @@ README / 共用 schema 由 A 整合；要改欄位先通知三人，先更新本
 ## Git workflow
 以遠端 main 為整合分支。三人由最新 main 建 `feat/frontend`、`feat/agent`、`feat/replanner`；每 30–45 分鐘提交可執行的小變更，經一位同伴檢查後合併。不要 force-push main；不要提交 .env、node_modules、.venv、SQLite runtime。共用檔衝突由 owner 處理，禁止以整檔覆蓋解決。
 
-合併前跑 `npm run build`、`npm run lint` 和後端 unittest。初始 commit 基於原有 Initial commit，並非重寫 git 歷史。
+合併前在 `frontend/` 跑 `pnpm build`、`pnpm lint`，並執行後端 unittest。初始 commit 基於原有 Initial commit，並非重寫 git 歷史。
 
 ## 5 小時時程
 | 時間 | Frontend | Backend A | Backend B | 里程碑 |

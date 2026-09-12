@@ -20,6 +20,7 @@
 
 - 先理解需求與現有文件，再提出實作
 - 不自行假設未決定的技術棧、API schema 或部署方式
+- Frontend 套件管理一律使用 pnpm，不使用 npm 或 yarn
 - 重要決策記錄於 `docs/decisions/`
 - 修改產品流程時，同步更新 `docs/product-flow.md`
 - 修改核心名詞或資料關係時，同步更新 `docs/domain-model.md`
@@ -34,7 +35,7 @@
 - type 使用 `feat`、`fix`、`refactor`、`docs`、`test`、`chore` 其中之一
 - scope 非必要；需要時優先使用 `frontend`、`backend`、`agent`、`replanner` 或 `docs`
 - description 使用簡短英文祈使句，不加句號
-- frontend 變更在 commit 前執行 `npm run lint` 與 `npm run build`
+- frontend 變更在 commit 前於 `frontend/` 執行 `pnpm lint` 與 `pnpm build`
 - backend 變更在 commit 前執行後端 unittest
 - 若檢查無法執行或未通過，必須明確說明，不得宣稱已驗證
 - 不使用 `--no-verify` 跳過檢查
