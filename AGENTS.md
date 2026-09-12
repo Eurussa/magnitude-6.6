@@ -2,19 +2,36 @@
 
 ## Project
 
-這是一個協助旅客在突發事件發生後，重新安排旅程的黑客松專案。
+SmartTrip 是一個 5 小時、三人協作的黑客松專案，協助自由行旅客遇到睡過頭、休館或下雨時，比較替代行程，並從選擇更新偏好權重。
+
+- 共用規格：`docs/DEVELOPMENT_SPEC.md`，產品範圍、API 目標與驗收以此為依據。
+- 成功標準：一分鐘內展示「原行程 → 事件 → A/B/C → 選擇 → 第二次個人化推薦」。
+- MVP 固定單一 `demo-user`、`tokyo-demo` 單日行程；不做登入、多使用者、多日最佳化、真實訂位取消或正式部署。
 
 ## Team responsibilities
 
-- Frontend：由目前 repo owner 負責
-- Backend：由另外兩位成員負責
-- 前後端透過明確的 API contract 協作
+- Frontend（repo owner）：`frontend/`，timeline、事件輸入、方案比較、loading/error、API types、選擇按鈕、偏好提示與 Google Maps link。
+- Backend A：`backend/agent/`、`backend/main.py`、`backend/models.py`、LLM 設定、偏好持久化與 selections API；整合 README 與共用 schema。
+- Backend B：`backend/replanner/`、`backend/data/`，天氣 adapter、fixtures、heuristic 與 scoring。
+- API 欄位變更先通知三人，由 A 同步開發規格與 Pydantic，再由 Frontend 更新 TypeScript。A/B 先約定 module 介面；B 不直接修改 agent，A 不直接修改 B 的演算法。
 
 ## Current stage
 
-- 專案處於需求與架構討論階段
-- 前端技術尚未決定
-- 未記錄於 `docs/decisions/` 的技術選型，不視為已確定
+- 已完成初始化：health/trip/replan API、JSON fixture、前端串接、Google Maps link 與 API 測試。
+- Replan 仍回傳 `status: placeholder`、`unknown` 事件與沿用原行程的三方案，不能視為可執行的重排。
+- 尚未實作真正 LLM 解析、重排、天氣套用、選擇 endpoint 與偏好持久化；天氣 adapter 已存在但尚未串入 replan。
+- 技術棧已由開發規格確定，整理於 `docs/decisions/`；目標 API 增量仍須三人共同確認，不得視為已上線契約。
+
+## Stack and development commands
+
+- Frontend：React + Vite + TypeScript + React Router + Tailwind CSS（Vite plugin）；Node.js 22.12+、pnpm 11+，套件版本以 `frontend/package.json` 與 lockfile 為準。
+- Backend：Python 3.11+、FastAPI、Pydantic v2、httpx、python-dotenv、Uvicorn；單一 server，agent/replanner 為 Python module。
+- JSON 為唯讀種子；持久化可用 stdlib SQLite，runtime 不提交。
+- 在 repo 根目錄建立並啟用 `.venv` 後，執行 `python -m pip install -r backend/requirements.lock.txt`；以 `python -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000` 啟動後端。
+- 在 `frontend/` 執行 `pnpm install --frozen-lockfile`、`pnpm dev`；Vite :5173 將 `/api` proxy 至 FastAPI :8000。
+- 前端檢查：在 `frontend/` 執行 `pnpm lint`、`pnpm build`。
+- 後端檢查：在 repo 根目錄、啟用 virtualenv 後執行 `python -m unittest discover -s backend/tests -v`。
+- `.env` 位於 repo 根目錄，初始化不需金鑰；LLM 金鑰只放後端，不使用 `VITE_` 變數傳給瀏覽器。
 
 ## Working agreements
 
@@ -24,10 +41,17 @@
 - 重要決策記錄於 `docs/decisions/`
 - 修改產品流程時，同步更新 `docs/product-flow.md`
 - 修改核心名詞或資料關係時，同步更新 `docs/domain-model.md`
-- 套件管理工具與開發指令確定後，補充於本文件
+- API 使用 `/api`、snake_case JSON；目前可執行 schema 以 `/openapi.json` 與 `/docs` 為準，目標增量見開發規格。
+- LLM 僅解析事件與產生說明，輸出經 `Event.model_validate_json` 驗證；可行性由 deterministic heuristic 檢查，不直接採信模型產生的行程。
+- 已完成活動不動；`booking=true` 或 `movable=false` 不得靜默移動，也不能為保留景點而解除預約鎖。只有 `ready` 且 `feasible` 的方案可套用。
+- 天氣只影響對應時段的戶外活動，以 Asia/Tokyo 對齊；fixture/fallback 必須標示來源，未知天氣不能當晴天。交通時間為 fixture，Google Maps 使用座標 Search URL。
+- 偏好學習是權重更新，不是模型訓練；選擇、套用行程與更新權重須同一交易，重複相同選擇不得重複加分。
+- 不加入規格排除的 Next.js/SSR、LangGraph、CrewAI、Leaflet/OSM、Google Maps SDK、OR-Tools 或 PostgreSQL。
 
 ## Git and commit rules
 
+- 遠端 `main` 為整合分支；團隊分支為 `feat/frontend`、`feat/agent`、`feat/replanner`。依規格每 30–45 分鐘整合可執行的小變更，經一位同伴檢查後合併；這不代表授權 agent 自行 commit。
+- 合併前需通過前端 lint/build 與後端 unittest。
 - 除非使用者明確要求，否則不主動建立 commit
 - commit 前先檢查 `git status` 與 diff，確認沒有混入其他成員或使用者的變更
 - 一個 commit 只包含一個可獨立理解的邏輯變更；不要把不相關的 frontend、backend 或文件修改綁在一起
