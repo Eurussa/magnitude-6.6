@@ -18,10 +18,10 @@
 
 1. 開啟 `/trip`，透過 `GET /api/trip` 載入 runtime 中的目前 multi-day `tokyo-demo`；前端依 `scheduled_date` 分組，今天直接顯示、接下來幾天可點擊展開。`GET /api/preferences` 可讀取已保存偏好。首次讀取才由唯讀種子建立 schema version 2 的 `backend/data/runtime/state.json`。
 2. 輸入文字，呼叫 `POST /api/replan`；可選 `now` 必須帶 offset，未提供時取行程當地目前時間。
-3. Backend A 從同一份 runtime state 讀取多日行程與偏好，以 LLM structured output 解析事件（無設定、provider 或驗證失敗時使用本機 fallback），並取得涵蓋 Trip 未來日期區間的正規化天氣 context，再交給 Backend B 的 planner boundary。
-4. `main.py` 預設注入 Backend B 的 async `LLMReplanner`；B 以 live LLM 或明確標示的 planning fixture 產生、驗證並排序三方案。A 保存 snapshot 後回傳 `status=ready`。只有明確未注入 planner 時才回不可選的 placeholder。
-5. 可透過 Google Maps Search URL 開啟地點。
-6. `POST /api/selections` 只接受 ready snapshot 的 `replan_id`／`plan_id`，在一次 runtime 原子更新中套用行程、將 Trip.version +1、保存選擇並更新偏好。
+3. Backend A 從同一份 runtime state 讀取多日行程與偏好，解析 placeholder 事件並取得涵蓋 Trip 未來日期區間的正規化天氣 context，再交給 Backend B 的 planner。
+4. API 回傳完整 `ReplanResponse`；目前為 `status=placeholder`、null replan/recommendation、`planning_source=unavailable`。事件仍為 `unknown`，後端 A/B/C 都沿用完整多日行程並標示 `feasible=false`。前端在 placeholder 狀態使用固定 fixture 呈現有差異的多日方案，明確標示為示範、不開放套用，也不視為後端完成的重排。
+5. 目前行程在 timeline 前提供「當日路線」預覽。使用者選擇有活動的日期後，前端只以該日活動、依時間順序建立 Google Maps Embed directions（單一活動使用 place）與外部 Maps URL；Embed key 缺少時保留外部連結並顯示 fallback。
+6. `POST /api/selections` 已註冊 `SelectionRequest`／`SelectionResponse` 與錯誤 schema，但在 snapshot 與原子套用完成前固定回 501。
 
 天氣 adapter 已移至 A 的 `agent/weather.py` 並接入 context。預設 `WEATHER_MODE=mock` 使用具明確日期且涵蓋三日的 fixture；live 模式以 date range 呼叫 Open-Meteo，失敗時嘗試完整 fixture，仍不可用時標示 unavailable。API 以 `weather.source` 區分來源，並以 `start_date`／`end_date` 表示涵蓋區間；不把降雨機率當作大雨強度。
 
@@ -38,23 +38,23 @@ Runtime JSON 會保存目前行程、偏好、snapshots 與冪等 selection resp
 7. 旅客選 A，前端呼叫 `POST /api/selections`，只送 `replan_id` 與 `plan_id`。Backend A 從保存的 snapshot 讀取方案，在同次 runtime JSON 原子更新內保存選擇、套用行程、將 Trip.version +1、增加 `preserve_booking` 權重與 `selection_count`。
 8. 前端依 `SelectionResponse` 中的 SelectionRecord、Trip 與 Preference 更新畫面，隱藏當下時間以前已完成的活動，未來日期維持可展開。套用僅改變本服務的行程資料，不執行外部訂位、取消或改訂。
 9. 旅客輸入第二個迪士尼雨天事件，A 讀取更新後的多日行程與偏好，取得剩餘 Trip 日期的天氣後交給 B 重新規劃；優先呈現符合保留預約偏好的跨日方案，顯示「根據你上次的選擇…」與選擇次數。
-10. 透過 Google Maps link 開啟地點；不需要地圖金鑰，不提供即時交通路由。
+10. 可從當日路線預覽開啟 Google Maps 地點或路線。外部 Maps URL 不需要 key；Embed 預覽使用受 HTTP referrer 限制且只啟用 Maps Embed API 的公開 client key，不提供即時交通路由。
 
 ## 例外流程
 
-| 情況 | 行為與契約 |
-|---|---|
-| 空白、過長訊息、未知行程或未帶 offset 的 now | 目前 API 回傳 422；message 必須 1–2000 字且不可全空白，trip_id 僅接受 tokyo-demo |
-| 行程載入失敗、網路中斷或 API 失敗 | 顯示 error，允許重試；不得將失敗呈現為已套用成功 |
-| runtime JSON 損壞或讀寫失敗 | 目前 API 回傳 503，不以種子靜默覆蓋已保存資料 |
-| 事件或 planning LLM timeout／非法 JSON | 事件解析改用本機 parser 時加入 response warning；B 會有限重試並使用明確標示的 planning fixture，若仍不可用則 A 回不含 provider 細節的 503；不直接使用未驗證內容 |
-| 多日天氣 timeout、不完整或不可用 | 目前以 `weather.source` 與 warnings 明示 `fixture` 或 `unavailable`；date range 必須涵蓋要求的每個日期，不能冒充即時資料，也不能將未知天氣當晴天 |
-| 方案仍是 placeholder | 顯示警告，不開放套用 |
-| 無可行替代方案或預約限制無解 | 目標為明示不可行並禁止套用；不可為增加景點數解除預約鎖 |
-| 重複提交同一選擇 | 以第一次保存的成功結果冪等回 200，不重複加分 |
-| 同次 replan 改選其他方案／選擇不可行方案 | 409 |
-| snapshot 或 plan 不存在 | 404 |
-| snapshot 的 Trip.version 已過期 | 409，Frontend 重新呼叫 replan 取得新方案 |
+| 情況                                         | 行為與契約                                                                                                                                                      |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 空白、過長訊息、未知行程或未帶 offset 的 now | 目前 API 回傳 422；message 必須 1–2000 字且不可全空白，trip_id 僅接受 tokyo-demo                                                                                |
+| 行程載入失敗、網路中斷或 API 失敗            | 顯示 error，允許重試；不得將失敗呈現為已套用成功                                                                                                                |
+| runtime JSON 損壞或讀寫失敗                  | 目前 API 回傳 503，不以種子靜默覆蓋已保存資料                                                                                                                   |
+| 事件或 planning LLM timeout／非法 JSON       | 事件解析改用本機 parser 時加入 response warning；B 會有限重試並使用明確標示的 planning fixture，若仍不可用則 A 回不含 provider 細節的 503；不直接使用未驗證內容 |
+| 多日天氣 timeout、不完整或不可用             | 目前以 `weather.source` 與 warnings 明示 `fixture` 或 `unavailable`；date range 必須涵蓋要求的每個日期，不能冒充即時資料，也不能將未知天氣當晴天                |
+| 方案仍是 placeholder                         | 顯示警告，不開放套用                                                                                                                                            |
+| 無可行替代方案或預約限制無解                 | 目標為明示不可行並禁止套用；不可為增加景點數解除預約鎖                                                                                                          |
+| 重複提交同一選擇                             | 以第一次保存的成功結果冪等回 200，不重複加分                                                                                                                    |
+| 同次 replan 改選其他方案／選擇不可行方案     | 409                                                                                                                                                             |
+| snapshot 或 plan 不存在                      | 404                                                                                                                                                             |
+| snapshot 的 Trip.version 已過期              | 409，Frontend 重新呼叫 replan 取得新方案                                                                                                                        |
 
 錯誤不得洩漏金鑰或供應商敏感內容。人工協助、價格即時變動追蹤與外部交易失敗處理不在目前 Demo 流程內。
 
