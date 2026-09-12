@@ -112,7 +112,7 @@ class Replanner(Protocol):
     async def generate_plans(self, context: ReplanContext, /) -> PlanningResult: ...
 ```
 
-此介面定義於 `backend/contracts.py`。目前 `candidate_plans(...)` 只是相容既有主流程的 placeholder；B 完成後由 A 在 `main.py` 注入／呼叫 `Replanner.generate_plans`，不在 main 內加入排程邏輯。
+此介面定義於 `backend/contracts.py`。B 已以 `LLMReplanner.generate_plans` 實作；`candidate_plans(...)` 只保留為相容既有主流程的 placeholder。由 A 在 `main.py` 注入／呼叫 async Protocol，不在 main 內加入排程邏輯。
 
 ## Replan response 與 snapshot
 

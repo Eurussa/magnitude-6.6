@@ -20,12 +20,14 @@
 2. 輸入文字，呼叫 `POST /api/replan`；可選 `now` 必須帶 offset，未提供時取行程當地目前時間。
 3. Backend A 從同一份 runtime state 讀取多日行程與偏好，解析 placeholder 事件並取得涵蓋 Trip 未來日期區間的正規化天氣 context，再交給 Backend B 的 planner。
 4. API 回傳完整 `ReplanResponse`；目前為 `status=placeholder`、null replan/recommendation、`planning_source=unavailable`。事件仍為 `unknown`，後端 A/B/C 都沿用完整多日行程並標示 `feasible=false`。前端在 placeholder 狀態使用固定 fixture 呈現有差異的多日方案，明確標示為示範、不開放套用，也不視為後端完成的重排。
+3. Backend A 從同一份 runtime state 讀取多日行程與偏好，解析 placeholder 事件並取得涵蓋 Trip 未來日期區間的正規化天氣 context。B 的 async planner 已可接收此 context，但 main 尚未改接。
+4. API 回傳完整 `ReplanResponse`；目前仍為 `status=placeholder`、null replan/recommendation、`planning_source=unavailable`。這是 A 的整合狀態，不是 B 模組的狀態；B 已能獨立回傳 live 或 fixture `PlanningResult`。
 5. 可透過 Google Maps Search URL 開啟地點。
 6. `POST /api/selections` 已註冊 `SelectionRequest`／`SelectionResponse` 與錯誤 schema，但在 snapshot 與原子套用完成前固定回 501。
 
 天氣 adapter 已移至 A 的 `agent/weather.py` 並接入 context。預設 `WEATHER_MODE=mock` 使用具明確日期且涵蓋三日的 fixture；live 模式以 date range 呼叫 Open-Meteo，失敗時嘗試完整 fixture，仍不可用時標示 unavailable。API 以 `weather.source` 區分來源，並以 `start_date`／`end_date` 表示涵蓋區間；不把降雨機率當作大雨強度。
 
-已提供行程／偏好的內部 JSON 保存介面，重啟會保留已保存內容；沒有 HTTP 任意儲存或重置 endpoint。仍未實作真正的 LLM 事件理解、LLM 行程重排、天氣影響方案、可行性驗證、snapshot、選擇交易、偏好學習或個人化排序，不能將 contract、context 與儲存基礎當作完整 Demo。
+已提供行程／偏好的內部 JSON 保存介面，重啟會保留已保存內容；沒有 HTTP 任意儲存或重置 endpoint。B 已實作 LLM 行程重排、天氣影響方案、可行性、impact/features 與個人化排序；仍未實作真正的 LLM 事件理解、main 串接、snapshot、選擇交易與偏好學習，因此完整 Demo 尚未完成。
 
 ## 核心流程（Demo 目標，尚未完整實作）
 
@@ -73,10 +75,16 @@
 - 選擇後可看到偏好原因與次數；相同選擇重送不重複計分，重啟後偏好仍存在。
 - 驗證空字串／未知行程 422、事件與 planning LLM 非法 JSON／timeout、天氣 timeout 與前端錯誤恢復。
 
-目前後端測試涵蓋 multi-day schema、API 契約、runtime JSON 保存與錯誤處理、多日天氣 context 與 fallback，以及 placeholder 未改動完整行程；完整事件解析、planning LLM 跨日重排、方案選擇及學習迴圈仍為待完成驗收。
+目前後端測試涵蓋 multi-day schema、API 契約、runtime JSON 保存與錯誤處理、多日天氣 context 與 fallback，以及 B 的 Responses API payload、structured output、重試、跨日交換、鎖定限制、changes、impact/features 與偏好排序。完整事件解析、B 與 main 的整合、方案選擇及學習迴圈仍為待完成驗收。
 
 ## 待確認事項
 
 - 外層 API 與 A/B module schema 已固定；若新增 `weather_override` 或欄位，必須視為契約變更，由 A/B/Frontend 共同確認並先更新文件／Pydantic。
+<<<<<<< HEAD
 - Backend B 補下午戶外候選、交通時間、營業時間、最晚抵達資料與 planning fallback，使雨天替代、LLM 輸出驗證與可行性可離線測試。
 - 共同確認 unknown 事件的後續互動與離線解析 fallback 的具體內容；404/409/501/503 外層錯誤語意已固定。
+=======
+- Backend A 將 `main.py` 從同步 placeholder 改接 `LLMReplanner.generate_plans`，並整合 snapshot、說明與可恢復的 provider error。
+- 共同確認 unknown 事件的後續互動、完成活動判定與離線解析 fallback 的具體內容；404/409/501/503 外層錯誤語意已固定。
+- Frontend owner 需依外層契約同步 multi-day types，並按 scheduled_date 分組呈現 Trip／Plan；本次不修改 `frontend/`。
+>>>>>>> dev/replanner

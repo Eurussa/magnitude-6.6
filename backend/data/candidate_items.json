@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "id": "candidate-mori-art",
+      "name": "森美術館（示範候選）",
+      "duration_minutes": 120,
+      "latitude": 35.6605,
+      "longitude": 139.7292,
+      "priority": 2,
+      "booking": false,
+      "movable": true,
+      "indoor": true,
+      "cost_jpy": 2400
+    }
+  ]
+}

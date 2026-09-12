@@ -1,6 +1,6 @@
 # Domain Model
 
-依據：[共用開發規格](DEVELOPMENT_SPEC.md)與[固定 API／模組契約](api-contract.md)。此文件統一產品名詞、資料關係與規則；可執行 schema 以 `backend/models.py`、`backend/contracts.py`、`/openapi.json` 與 `/docs` 為準。Schema 已固定，但 LLM 重排、snapshot 與 selection 交易仍可尚未實作，兩者必須分開理解。
+依據：[共用開發規格](DEVELOPMENT_SPEC.md)與[固定 API／模組契約](api-contract.md)。此文件統一產品名詞、資料關係與規則；可執行 schema 以 `backend/models.py`、`backend/contracts.py`、`/openapi.json` 與 `/docs` 為準。Schema 與 B 的 LLM 重排模組已完成，但 HTTP route 串接、snapshot 與 selection 交易仍未實作，兩者必須分開理解。
 
 ## 核心名詞
 
@@ -44,7 +44,7 @@ LLM 輸出須經 `Event.model_validate_json`；目前 parser 僅回傳 unknown �
 
 ### WeatherContext
 
-Replanner 的多日天氣輸入，與使用者輸入的 weather Event 分開。Backend A 的 `agent/weather.py` 從 `max(now 的行程當地日期, trip.start_date)` 取得至 `trip.end_date`，正規化 Open-Meteo hourly `precipitation_probability` 或展示 fixture，再串入 replan context；Backend B 將完整日期區間提供給 planning LLM 產生跨日方案，目前 placeholder 尚不套用天氣影響。
+Replanner 的多日天氣輸入，與使用者輸入的 weather Event 分開。Backend A 的 `agent/weather.py` 從 `max(now 的行程當地日期, trip.start_date)` 取得至 `trip.end_date`，正規化 Open-Meteo hourly `precipitation_probability` 或展示 fixture，再串入 replan context；Backend B 將完整日期區間提供給 planning LLM，並驗證受影響的戶外活動未留在高風險時段。尚未改接 B 的 HTTP placeholder 不會套用此能力。
 
 | 欄位 | 意義／規則 |
 |---|---|
@@ -69,7 +69,7 @@ A 的 `agent/context.py` 從同一份 runtime state 讀取 multi-day Trip 與 Pr
 | B | maximize_attractions | 保留最多景點 |
 | C | relaxed | 最輕鬆 |
 
-目前 placeholder 的三方案皆沿用 runtime 行程且 `feasible=false`。固定欄位如下：
+B 的 `LLMReplanner` 會產生三個完整、不同且已驗證的方案；尚未改接的 HTTP placeholder 仍沿用 runtime 行程且 `feasible=false`。固定欄位如下：
 
 | 欄位 | 意義 |
 |---|---|
@@ -77,7 +77,7 @@ A 的 `agent/context.py` 從同一份 runtime state 讀取 multi-day Trip 與 Pr
 | feasible | 可行性；false 時不得套用 |
 | changes | `PlanChange[]`，原 Trip 每個 item 各一筆 keep/move/cancel，額外項目用 add；from/to 日期時間的固定 nullable 規則見 API 契約 |
 | additional_travel_minutes | 交通分鐘 delta，可為負；依 fixture 計算，不宣稱即時導航 |
-| additional_cost_jpy | 日圓費用 delta，可為負；計算所需 fixture 待補 |
+| additional_cost_jpy | 日圓費用 delta，可為負；由 `activity_costs.json` 展示 fixture 計算，不代表即時價格或退款 |
 | booking_warnings | 預約影響與限制 |
 | features | preserve_booking、maximize_attractions、relaxed 三種特徵，各 0–1，供偏好評分 |
 | explanation | A 根據已驗證方案事實產生的可讀說明；B 可先留空 |
@@ -86,7 +86,7 @@ A 的 `agent/context.py` 從同一份 runtime state 讀取 multi-day Trip 與 Pr
 
 ### ReplanResponse / Replan snapshot
 
-固定回應欄位為 `status`、`replan_id`、`planning_source`、`event`、`weather`、`preferences`、`plans`、`recommended_plan_id`、`preference_insight`、`warnings`。目前回 `status=placeholder`、null replan/recommendation、`planning_source=unavailable`；完成後回 ready、UUID replan_id 與 live/fixture planning source。天氣來源另由 `weather.source` 表達。
+固定回應欄位為 `status`、`replan_id`、`planning_source`、`event`、`weather`、`preferences`、`plans`、`recommended_plan_id`、`preference_insight`、`warnings`。目前 HTTP route 仍回 `status=placeholder`、null replan/recommendation、`planning_source=unavailable`；A 改接已完成的 B Protocol 並保存 snapshot 後才回 ready、UUID replan_id 與 live/fixture planning source。天氣來源另由 `weather.source` 表達。
 
 B 回傳的 `PlanningResult` 包含 `source`、排序後且剛好三個的 plans、`recommended_plan_id` 與 warnings。只要至少一個 plan feasible，就必須推薦其中一個；全都不可行時 recommendation 為 null。偏好 raw score 不屬於 `Plan`、`PlanningResult` 或 API response，只存在於 B 的 scoring 過程。
 
@@ -125,7 +125,7 @@ Backend A 的 RuntimeStore 提供 `load_state()`、`get_trip()`、`get_preferenc
 - Backend A 擁有 agent 的 parser / prompts、context、weather、preference / runtime、explanation，以及 `main.py`、`models.py` 的整合。天氣 adapter 已從 `replanner/weather.py` 移至 `agent/weather.py`；現階段不另建 services/。
 - Backend B 擁有 `replanner/planner.py`、planning prompt、LLM multi-day candidate generation、structured output 與限制驗證，以及 `scoring.py` 的 deterministic preference ranking / impact；只接收共用模型，可呼叫設定好的 LLM provider，但不讀寫 runtime、不取得天氣，也不依賴 `agent/`。
 - `data/` 依內容分工：B 管多日行程、候選、交通與營業時間 fixture；A 管偏好種子、多日天氣 fixture 與 runtime。
-- `parse_event(message, *, trip, now) -> Event` 仍為 placeholder，但已接收解析相對日期所需的 multi-day Trip 與 now；`candidate_plans(...)` 也只為既有主流程提供 placeholder。正式 B 介面已固定為 `await Replanner.generate_plans(context: ReplanContext) -> PlanningResult`，Protocol 位於 `backend/contracts.py`；共用 LLM client 的注入細節不屬於外層契約。`get_weather(trip, *, now) -> WeatherContext` 與 `fetch_weather(latitude, longitude, *, timezone, start_date, end_date) -> WeatherContext` 均為 async。
+- `parse_event(message, *, trip, now) -> Event` 仍為 placeholder，但已接收解析相對日期所需的 multi-day Trip 與 now；`candidate_plans(...)` 只為既有主流程提供 placeholder。正式 B 介面已固定為 `await Replanner.generate_plans(context: ReplanContext) -> PlanningResult`，Protocol 位於 `backend/contracts.py`，並由 `LLMReplanner` 實作；B 的 provider/config 注入細節不屬於外層契約。`get_weather(trip, *, now) -> WeatherContext` 與 `fetch_weather(latitude, longitude, *, timezone, start_date, end_date) -> WeatherContext` 均為 async。
 - B 的 planning LLM 產生 A/B/C 行程，B 驗證後回傳可檢查的方案事實、排序與 `recommended_plan_id`；A 組成推薦解釋。raw score 僅供 B 內部 deterministic 排序，不加入 API response。
 
 ## 概念關係
@@ -142,4 +142,5 @@ Backend A 的 RuntimeStore 提供 `load_state()`、`get_trip()`、`get_preferenc
 - 外層模型與 planner 參數已固定；後續變更須由 A/B/Frontend 共同確認，先改 API 契約與 ADR，再同步 Pydantic/OpenAPI 與 frontend types。
 - 跨日營業／抵達限制、候選景點與交通／費用 fixture 的完整格式。
 - features 的實際計算方式、LLM provider/model、重試與 fallback 細節由各 backend package 實作；不得改變 0..1 的外層欄位契約。
+- B 已將完成活動、跨日營業／抵達、可信候選、交通／費用、features、OpenAI provider、重試與 fallback 固定於 `backend/replanner/` 與 B-owned fixture；後續調整不得改變 0..1 的外層欄位契約。
 - 選擇與 snapshot 納入 runtime JSON 後的內部 schema version 與升級方式，由 Backend A 實作時決定；外部 404/409/501/503 語意已固定。

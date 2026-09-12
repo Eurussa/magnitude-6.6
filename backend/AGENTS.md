@@ -11,7 +11,7 @@
 - 使用 Python 3.11+，並從 repository 根目錄以 package 形式執行後端與測試。
 - 優先使用 Python standard library；新增第三方套件前，先確認現有依賴無法合理完成需求。
 - 新增、移除或升級套件時，同步更新 `requirements.txt` 與 `requirements.lock.txt`，不得只修改其中一份。
-- secrets 與環境差異放在根目錄 `.env`；只提交安全的範例值至 `.env.example`。
+- secrets 與環境差異放在被 Git 忽略的 repository-root `.env`；Agent 與 Backend B 共用 `LLM_` 前綴設定。只提交安全的 root `.env.example`。
 
 ## Module boundaries
 
