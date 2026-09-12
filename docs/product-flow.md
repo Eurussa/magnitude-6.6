@@ -16,10 +16,10 @@
 
 ## 目前實作
 
-1. 開啟 `/trip`，透過 `GET /api/trip` 載入 runtime 中的目前 multi-day `tokyo-demo`；`GET /api/preferences` 可讀取已保存偏好。首次讀取才由唯讀種子建立 schema version 2 的 `backend/data/runtime/state.json`。
+1. 開啟 `/trip`，透過 `GET /api/trip` 載入 runtime 中的目前 multi-day `tokyo-demo`；前端依 `scheduled_date` 分組，今天直接顯示、接下來幾天可點擊展開。`GET /api/preferences` 可讀取已保存偏好。首次讀取才由唯讀種子建立 schema version 2 的 `backend/data/runtime/state.json`。
 2. 輸入文字，呼叫 `POST /api/replan`；可選 `now` 必須帶 offset，未提供時取行程當地目前時間。
 3. Backend A 從同一份 runtime state 讀取多日行程與偏好，解析 placeholder 事件並取得涵蓋 Trip 未來日期區間的正規化天氣 context，再交給 Backend B 的 planner。
-4. API 回傳完整 `ReplanResponse`；目前為 `status=placeholder`、null replan/recommendation、`planning_source=unavailable`。事件仍為 `unknown`，A/B/C 都沿用完整多日行程、標示 `feasible=false` 並顯示警告。
+4. API 回傳完整 `ReplanResponse`；目前為 `status=placeholder`、null replan/recommendation、`planning_source=unavailable`。事件仍為 `unknown`，後端 A/B/C 都沿用完整多日行程並標示 `feasible=false`。前端在 placeholder 狀態使用固定 fixture 呈現有差異的多日方案，明確標示為示範、不開放套用，也不視為後端完成的重排。
 5. 可透過 Google Maps Search URL 開啟地點。
 6. `POST /api/selections` 已註冊 `SelectionRequest`／`SelectionResponse` 與錯誤 schema，但在 snapshot 與原子套用完成前固定回 501。
 
@@ -30,13 +30,13 @@
 ## 核心流程（Demo 目標，尚未完整實作）
 
 1. 載入已保存的目前多日行程與使用者偏好，依 `scheduled_date` 分組顯示 timeline 與鎖定預約；首次使用才由固定種子初始化。
-2. 旅客輸入事件文字；前端送出 `trip_id`、`message` 與可選的 `now`（帶 offset 的 ISO8601），請求期間顯示 loading。展示日期與已完成活動的判定仍需隨重排實作確認。
+2. 旅客輸入事件文字；前端送出 `trip_id`、`message` 與可選的 `now`（帶 offset 的 ISO8601），請求期間顯示 loading。前端依 Trip timezone 與完整日期時間標示現在／接下來的活動；套用成功後只顯示當下仍在進行及尚未開始的活動，後端仍保存並回傳完整 Trip。
 3. Backend A 的 Agent 將文字解析成 `delay`、`closure`、`weather` 或 `unknown`，並以 `affected_item_ids`／`affected_dates` 表達跨項目與跨日期影響，再經 Pydantic 驗證；睡過頭兩小時對應 delay 120 分鐘，「後天」依 now 與 Trip timezone 解析。解析失敗須明示 fallback 或錯誤，A 同時取得多日天氣與偏好 context。
 4. Backend A 以固定 `ReplanContext` 呼叫 `await Replanner.generate_plans(context)`；Backend B 接收事件、完整多日行程、日期區間天氣 context、偏好與 now，呼叫 planning LLM 產生 A 保留預約、B 保留最多景點、C 最輕鬆。B 擁有 planning prompt 與 structured output，不直接取得天氣或讀寫 runtime。
 5. B 將 LLM 回應驗證成結構化方案，檢查日期範圍、項目參照、同日時間、跨日移動與必要限制，並整理各方案的保留／移動／取消、交通增量、費用增量、預約影響、features 與可行性。方案可以整批更新某日項目的 `scheduled_date`，例如交換迪士尼日與原本 9/13 的安排；無效輸出應重試、fallback 或明示錯誤，不可直接當作 ready。A 依這些事實組成可讀說明供前端顯示。
 6. B 以 `sum(weight * feature)` 計算內部 score 並排序，同分固定 A/B/C；對外只提供排序後的 plans 與 `recommended_plan_id`，不回傳 raw score。前端顯示推薦方案與偏好原因，僅 `status=ready` 且 `feasible=true` 可選擇套用。
 7. 旅客選 A，前端呼叫 `POST /api/selections`，只送 `replan_id` 與 `plan_id`。Backend A 從保存的 snapshot 讀取方案，在同次 runtime JSON 原子更新內保存選擇、套用行程、將 Trip.version +1、增加 `preserve_booking` 權重與 `selection_count`；schema 已固定，snapshot 與交易仍待實作。
-8. 前端依 `SelectionResponse` 中的 SelectionRecord、Trip 與 Preference 更新畫面。套用僅改變本服務的行程資料，不執行外部訂位、取消或改訂。
+8. 前端依 `SelectionResponse` 中的 SelectionRecord、Trip 與 Preference 更新畫面，隱藏當下時間以前已完成的活動，未來日期維持可展開。套用僅改變本服務的行程資料，不執行外部訂位、取消或改訂。
 9. 旅客輸入第二個迪士尼雨天事件，A 讀取更新後的多日行程與偏好，取得剩餘 Trip 日期的天氣後交給 B 重新規劃；優先呈現符合保留預約偏好的跨日方案，顯示「根據你上次的選擇…」與選擇次數。
 10. 透過 Google Maps link 開啟地點；不需要地圖金鑰，不提供即時交通路由。
 
@@ -79,5 +79,4 @@
 
 - 外層 API 與 A/B module schema 已固定；若新增 `weather_override` 或欄位，必須視為契約變更，由 A/B/Frontend 共同確認並先更新文件／Pydantic。
 - Backend B 補下午戶外候選、交通時間、營業時間、最晚抵達資料與 planning fallback，使雨天替代、LLM 輸出驗證與可行性可離線測試。
-- 共同確認 unknown 事件的後續互動、完成活動判定與離線解析 fallback 的具體內容；404/409/501/503 外層錯誤語意已固定。
-- Frontend owner 需依外層契約同步 multi-day types，並按 scheduled_date 分組呈現 Trip／Plan；本次不修改 `frontend/`。
+- 共同確認 unknown 事件的後續互動與離線解析 fallback 的具體內容；404/409/501/503 外層錯誤語意已固定。

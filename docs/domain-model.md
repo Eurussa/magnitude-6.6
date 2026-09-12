@@ -140,7 +140,6 @@ Backend A 的 RuntimeStore 提供 `load_state()`、`get_trip()`、`get_preferenc
 ## 待確認事項
 
 - 外層模型與 planner 參數已固定；後續變更須由 A/B/Frontend 共同確認，先改 API 契約與 ADR，再同步 Pydantic/OpenAPI 與 frontend types。
-- 完成活動判定、跨日營業／抵達限制、候選景點與交通／費用 fixture 的完整格式。
+- 跨日營業／抵達限制、候選景點與交通／費用 fixture 的完整格式。
 - features 的實際計算方式、LLM provider/model、重試與 fallback 細節由各 backend package 實作；不得改變 0..1 的外層欄位契約。
 - 選擇與 snapshot 納入 runtime JSON 後的內部 schema version 與升級方式，由 Backend A 實作時決定；外部 404/409/501/503 語意已固定。
-- Frontend owner 需同步 TripItem.scheduled_date、Trip date range、Event arrays、WeatherContext date range，並將 timeline 依日期分組；本次不修改 `frontend/`。

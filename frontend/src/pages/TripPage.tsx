@@ -1,14 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getTrip, replan, type ReplanResponse, type Trip } from '../api/client'
+import { getTrip, replan, selectPlan, type PlanId, type ReplanResponse, type Trip } from '../api/client'
 import { EventSheet } from '../components/EventSheet'
 import { LoadingView } from '../components/LoadingView'
+import { MultiDaySchedule } from '../components/MultiDaySchedule'
 import { ResultsView } from '../components/ResultsView'
-import { TripTimeline } from '../components/TripTimeline'
+import { getTripClock, isPastItem } from '../utils/tripTime'
 
 const minimumLoadingTime = 900
 
 function wait(milliseconds: number) {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : '發生未預期的錯誤，請再試一次。'
 }
 
 export function TripPage() {
@@ -19,6 +24,10 @@ export function TripPage() {
   const [replanError, setReplanError] = useState('')
   const [loadingTrip, setLoadingTrip] = useState(true)
   const [replanning, setReplanning] = useState(false)
+  const [applyingPlanId, setApplyingPlanId] = useState<PlanId | null>(null)
+  const [applyError, setApplyError] = useState('')
+  const [hidePastItems, setHidePastItems] = useState(false)
+  const [appliedNotice, setAppliedNotice] = useState('')
   const [eventSheetOpen, setEventSheetOpen] = useState(false)
   const loadAttempt = useRef(0)
 
@@ -29,9 +38,12 @@ export function TripPage() {
 
     try {
       const response = await getTrip()
-      if (attempt === loadAttempt.current) setTrip(response)
+      if (attempt === loadAttempt.current) {
+        setTrip(response)
+        setHidePastItems(response.version > 1)
+      }
     } catch (error) {
-      if (attempt === loadAttempt.current) setTripError(String(error))
+      if (attempt === loadAttempt.current) setTripError(errorMessage(error))
     } finally {
       if (attempt === loadAttempt.current) setLoadingTrip(false)
     }
@@ -51,6 +63,7 @@ export function TripPage() {
     setEventSheetOpen(false)
     setReplanning(true)
     setReplanError('')
+    setApplyError('')
     setResult(null)
     const startedAt = Date.now()
 
@@ -60,9 +73,26 @@ export function TripPage() {
       setResult(response)
     } catch (error) {
       await wait(Math.max(0, minimumLoadingTime - (Date.now() - startedAt)))
-      setReplanError(String(error))
+      setReplanError(errorMessage(error))
     } finally {
       setReplanning(false)
+    }
+  }
+
+  async function applyPlan(planId: PlanId) {
+    if (!result?.replan_id || result.status !== 'ready' || applyingPlanId) return
+    setApplyingPlanId(planId)
+    setApplyError('')
+    try {
+      const response = await selectPlan(result.replan_id, planId)
+      setTrip(response.trip)
+      setHidePastItems(true)
+      setAppliedNotice(`已套用方案 ${response.selection.plan_id}，以下只顯示目前時間之後的行程。`)
+      setResult(null)
+    } catch (error) {
+      setApplyError(errorMessage(error))
+    } finally {
+      setApplyingPlanId(null)
     }
   }
 
@@ -74,12 +104,20 @@ export function TripPage() {
     return (
       <div className="app-shell">
         <ResultsView
-          onBack={() => setResult(null)}
+          onBack={() => {
+            setApplyError('')
+            setResult(null)
+          }}
           onEditEvent={() => {
+            setApplyError('')
             setResult(null)
             setEventSheetOpen(true)
           }}
           result={result}
+          applyingPlanId={applyingPlanId}
+          applyError={applyError}
+          onApply={(planId) => void applyPlan(planId)}
+          timezone={trip?.timezone ?? result.weather.timezone}
         />
         {eventSheetOpen && (
           <EventSheet
@@ -92,6 +130,12 @@ export function TripPage() {
       </div>
     )
   }
+
+  const visibleItems = trip
+    ? hidePastItems
+      ? trip.items.filter((item) => !isPastItem(item, getTripClock(trip.timezone)))
+      : trip.items
+    : []
 
   return (
     <div className="app-shell">
@@ -115,11 +159,13 @@ export function TripPage() {
         <section aria-labelledby="today-title" className="px-4 pt-6">
           <div className="flex items-end justify-between gap-4 px-2">
             <div>
-              <p className="text-sm font-medium text-[#5d7187]">今日行程</p>
+              <p className="text-sm font-medium text-[#5d7187]">目前行程</p>
               <h2 className="mt-1 text-2xl font-bold text-[#10234a]" id="today-title">{trip?.city ?? 'Tokyo'}</h2>
             </div>
-            {trip && <p className="text-sm font-semibold text-[#168b86]">{trip.items.length} 個活動</p>}
+            {trip && <p className="text-sm font-semibold text-[#168b86]">共 {visibleItems.length} 個活動</p>}
           </div>
+
+          {appliedNotice && <p className="mt-4 rounded-2xl bg-[#eaf6f5] p-4 text-sm leading-6 text-[#235b58]" role="status">{appliedNotice}</p>}
 
           {loadingTrip && <p className="px-2 py-10 text-center text-[#5d7187]" role="status">正在載入行程⋯</p>}
 
@@ -137,7 +183,7 @@ export function TripPage() {
             </div>
           )}
 
-          {trip && <TripTimeline items={trip.items} timezone={trip.timezone} />}
+          {trip && <MultiDaySchedule items={visibleItems} timezone={trip.timezone} />}
 
           {replanError && (
             <div className="mb-5 rounded-2xl bg-[#fff0ee] p-4" role="alert">

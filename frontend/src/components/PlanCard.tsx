@@ -1,12 +1,17 @@
 import { useState } from 'react'
-import type { Plan } from '../api/client'
+import type { Plan, PlanId } from '../api/client'
+import { MultiDaySchedule } from './MultiDaySchedule'
 
 interface PlanCardProps {
   plan: Plan
   canApply: boolean
+  isApplying: boolean
+  isRecommended: boolean
+  onApply: (planId: PlanId) => void
+  timezone: string
 }
 
-export function PlanCard({ plan, canApply }: PlanCardProps) {
+export function PlanCard({ plan, canApply, isApplying, isRecommended, onApply, timezone }: PlanCardProps) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -16,7 +21,10 @@ export function PlanCard({ plan, canApply }: PlanCardProps) {
           {plan.id}
         </span>
         <div className="min-w-0 flex-1">
-          <h2 className="break-words text-lg font-bold text-[#10234a]">{plan.title}</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="break-words text-lg font-bold text-[#10234a]">{plan.title}</h2>
+            {isRecommended && <span className="rounded-full bg-[#fff1df] px-2 py-1 text-xs font-bold text-[#9a562e]">推薦</span>}
+          </div>
           <p className="mt-0.5 text-sm text-[#5d7187]">{canApply ? '可以套用' : '目前不可套用'}</p>
         </div>
       </div>
@@ -26,15 +34,14 @@ export function PlanCard({ plan, canApply }: PlanCardProps) {
       {expanded && (
         <div className="mt-4 rounded-2xl bg-[#f5f9fc] p-4">
           <p className="text-sm font-semibold text-[#29445e]">方案中的行程</p>
-          <ul className="mt-3 space-y-3">
-            {plan.items.map((item) => (
-              <li className="flex gap-3 text-sm" key={item.id}>
-                <time className="w-12 shrink-0 font-medium text-[#117570]">{item.start_time}</time>
-                <span className="break-words text-[#29445e]">{item.name}</span>
-              </li>
-            ))}
-          </ul>
+          <MultiDaySchedule items={plan.items} showMaps={false} timezone={timezone} />
         </div>
+      )}
+
+      {plan.booking_warnings.length > 0 && (
+        <ul className="mt-4 space-y-1 rounded-2xl bg-[#fff1df] p-3 text-sm leading-6 text-[#67431f]">
+          {plan.booking_warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
       )}
 
       <div className="mt-4 flex gap-2">
@@ -48,10 +55,11 @@ export function PlanCard({ plan, canApply }: PlanCardProps) {
         </button>
         <button
           className="min-h-11 flex-1 rounded-xl bg-[#123d68] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#d8e0e7] disabled:text-[#718191]"
-          disabled={!canApply}
+          disabled={!canApply || isApplying}
+          onClick={() => onApply(plan.id)}
           type="button"
         >
-          套用方案 {plan.id}
+          {isApplying ? '正在套用⋯' : `套用方案 ${plan.id}`}
         </button>
       </div>
     </article>
