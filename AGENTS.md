@@ -36,6 +36,7 @@ SmartTrip 是一個 5 小時、三人協作的黑客松專案，協助自由行�
 
 ## Working agreements
 
+- 修改 `frontend/` 內任何檔案前，必須先閱讀並遵守 `frontend/AGENTS.md`
 - 先理解需求與現有文件，再提出實作
 - 不自行假設未決定的技術棧、API schema 或部署方式
 - Frontend 套件管理一律使用 pnpm，不使用 npm 或 yarn
