@@ -1,18 +1,19 @@
 """Backend A's single-process JSON store; seeds are never overwritten.
 
 Share one RuntimeStore per FastAPI process. Read/write locking is in-process;
-run one worker while using JSON. Selection transactions are future work.
+run one worker while using JSON. Selection transitions use the same lock and write.
 """
 import os
 import tempfile
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 from threading import RLock
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from ..models import Preference, Trip
+from ..models import Preference, ReplanSnapshot, SelectionResponse, Trip
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
@@ -23,6 +24,8 @@ class RuntimeState(BaseModel):
     schema_version: Literal[2] = 2
     trip: Trip
     preferences: Preference
+    replan_snapshots: dict[str, ReplanSnapshot] = Field(default_factory=dict)
+    selection_results: dict[str, SelectionResponse] = Field(default_factory=dict)
 
 
 class RuntimeStorageError(Exception):
@@ -58,10 +61,41 @@ class RuntimeStore:
             self._write(state)
 
     def save_state(self, trip: Trip, preferences: Preference) -> None:
-        """Persist a trusted trip/preferences pair together, not a selection API."""
+        """Persist a trusted trip/preferences pair while retaining workflow records."""
         with self._lock:
-            self._read()  # Refuse to overwrite a corrupt or unsupported state.
-            self._write(RuntimeState(trip=trip, preferences=preferences))
+            state = self._read()  # Refuse to overwrite corrupt or unsupported state.
+            state.trip = trip
+            state.preferences = preferences
+            self._write(state)
+
+    def save_replan_snapshot(self, snapshot: ReplanSnapshot) -> None:
+        """Persist one validated B result before exposing its replan id."""
+        key = str(snapshot.replan_id)
+
+        def save(state: RuntimeState) -> RuntimeState:
+            existing = state.replan_snapshots.get(key)
+            if existing is not None and existing != snapshot:
+                raise RuntimeStorageError("Replan ID 已存在且內容不同。")
+            state.replan_snapshots[key] = snapshot
+            return state
+
+        self.update_state(save)
+
+    def update_state(
+        self, update: Callable[[RuntimeState], RuntimeState],
+    ) -> RuntimeState:
+        """Atomically apply one validated state transition under the process lock."""
+        with self._lock:
+            current = self._read()
+            candidate = update(current.model_copy(deep=True))
+            try:
+                validated = RuntimeState.model_validate(candidate.model_dump())
+            except (AttributeError, ValidationError) as exc:
+                raise RuntimeStorageError(
+                    "Runtime JSON 更新結果格式不正確；既有資料未變更。",
+                ) from exc
+            self._write(validated)
+            return validated.model_copy(deep=True)
 
     def _read(self) -> RuntimeState:
         try:

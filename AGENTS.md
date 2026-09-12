@@ -11,16 +11,16 @@ SmartTrip 是一個 5 小時、三人協作的黑客松專案，協助自由行�
 ## Team responsibilities
 
 - Frontend（repo owner）：`frontend/`，timeline、事件輸入、方案比較、loading/error、API types、選擇按鈕、偏好提示與 Google Maps link。
-- Backend A：`backend/agent/` 的事件解析、context、天氣、偏好讀寫與推薦解釋；整合 `backend/main.py`、`backend/models.py`、共用 LLM provider 設定、README 與共用 schema，後續負責 snapshot 與 selection 交易實作。
+- Backend A：`backend/agent/` 的事件解析、context、天氣、偏好讀寫與推薦解釋；整合 `backend/main.py`、`backend/models.py`、共用 LLM provider 設定、README 與共用 schema，負責 snapshot 與 selection 交易。
 - Backend B：`backend/replanner/` 的 planning prompt、LLM 行程重排、structured output 驗證、可行性、scoring / impact；維護行程、候選與交通 fixture。
 - `backend/data/` 依內容分工：A 管偏好、天氣與 runtime JSON，B 管行程與排程 fixture。
 - API 欄位變更先通知三人，由 A 同步 API 契約、開發規格與 Pydantic，再由 Frontend 更新 TypeScript。A/B 使用 `ReplanContext → PlanningResult` 的固定 Protocol；B 不直接修改 agent，A 不直接修改 B 的演算法。
 
 ## Current stage
 
-- 已有 health/trip/preferences/replan API、完整外層 Pydantic/OpenAPI schema、selections route 契約、JSON fixture、前端串接、Google Maps link、天氣 context 與 runtime JSON 行程／偏好讀寫。
-- Replan 仍回傳 `status: placeholder`、`unknown` 事件與沿用目前行程的三方案，不能視為可執行的重排。
-- Selections route 目前固定回 501；尚未實作真正 LLM 解析、重排、天氣影響排程、snapshot、選擇交易與偏好學習。Schema 已固定不等於功能完成。
+- 已有 health/trip/preferences/replan/selections API、完整外層 Pydantic/OpenAPI schema、JSON fixture、前端串接、Google Maps link、多日事件 fallback、天氣 context 與 runtime JSON。
+- 未注入 Backend B replanner 時，Replan 仍回傳 `status: placeholder` 與沿用目前行程的三方案，不能視為可執行的重排。
+- Backend A 已完成 B Protocol 注入、snapshot 與 selection 原子交易；尚未接通外部 LLM 事件解析及 B 的真正跨日重排。
 - 技術棧與責任邊界整理於 `docs/decisions/`；003–006 已固定 selection、多日與 LLM replanning 契約。
 
 ## Stack and development commands

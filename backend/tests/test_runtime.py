@@ -75,6 +75,33 @@ class RuntimeStoreTest(unittest.TestCase):
         self.assertEqual(state.trip, trip)
         self.assertEqual(state.preferences, preferences)
 
+    def test_update_state_applies_one_atomic_transition(self):
+        def update(state):
+            state.trip.items[0].name = "同次更新"
+            state.preferences.selection_count += 1
+            return state
+
+        result = self.store.update_state(update)
+
+        saved = self.fresh_store().load_state()
+        self.assertEqual(saved, result)
+        self.assertEqual(saved.trip.items[0].name, "同次更新")
+        self.assertEqual(saved.preferences.selection_count, 1)
+
+    def test_failed_state_transition_does_not_write(self):
+        original = self.store.load_state()
+        original_bytes = self.store.path.read_bytes()
+
+        def fail(state):
+            state.preferences.selection_count = -1
+            return state
+
+        with self.assertRaises(RuntimeStorageError):
+            self.store.update_state(fail)
+
+        self.assertEqual(self.store.path.read_bytes(), original_bytes)
+        self.assertEqual(self.fresh_store().load_state(), original)
+
     def test_read_result_does_not_persist_changes_without_save(self):
         original = self.store.load_state()
         changed = self.store.load_state()

@@ -1,15 +1,63 @@
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
 from backend.agent.runtime import RuntimeStore
-from backend.main import app, get_store
+from backend.contracts import ReplannerUnavailableError
+from backend.llm import LLMProviderError
+from backend.main import app, get_replanner, get_store
+from backend.models import PlanningResult, ReplanContext
 from backend.replanner.planner import candidate_plans
+
+
+class ReadyReplanner:
+    def __init__(self) -> None:
+        self.context: ReplanContext | None = None
+
+    async def generate_plans(self, context: ReplanContext) -> PlanningResult:
+        self.context = context
+        plans = candidate_plans(
+            context.trip,
+            event=context.event,
+            weather=context.weather,
+            preferences=context.preferences,
+            now=context.now,
+        )
+        plans = [plan.model_copy(update={"feasible": True}) for plan in plans]
+        return PlanningResult(
+            source="fixture",
+            plans=plans,
+            recommended_plan_id="A",
+            warnings=["B fixture"],
+        )
+
+
+class InfeasibleReplanner:
+    async def generate_plans(self, context: ReplanContext) -> PlanningResult:
+        plans = candidate_plans(
+            context.trip,
+            event=context.event,
+            weather=context.weather,
+            preferences=context.preferences,
+            now=context.now,
+        )
+        return PlanningResult(
+            source="fixture",
+            plans=plans,
+            recommended_plan_id=None,
+            warnings=["沒有可行方案"],
+        )
+
+
+class UnavailableReplanner:
+    async def generate_plans(self, context: ReplanContext) -> PlanningResult:
+        raise ReplannerUnavailableError("provider-secret-detail")
 
 
 class ApiTest(unittest.TestCase):
@@ -19,7 +67,11 @@ class ApiTest(unittest.TestCase):
         self.store = RuntimeStore(Path(self.temp.name))
         app.dependency_overrides[get_store] = lambda: self.store
         self.addCleanup(app.dependency_overrides.clear)
-        self.enterContext(patch.dict(os.environ, {"WEATHER_MODE": "mock"}))
+        self.enterContext(patch.dict(os.environ, {
+            "WEATHER_MODE": "mock",
+            "LLM_API_KEY": "",
+            "LLM_MODEL": "",
+        }))
         self.client = self.enterContext(TestClient(app))
 
     def test_health_and_trip(self):
@@ -107,7 +159,7 @@ class ApiTest(unittest.TestCase):
         selection = document["paths"]["/api/selections"]["post"]
         self.assertEqual(
             set(selection["responses"]),
-            {"200", "404", "409", "422", "501", "503"},
+            {"200", "404", "409", "422", "503"},
         )
 
     def test_replan_contract_and_booking_preservation(self):
@@ -127,10 +179,73 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(data["weather"]["start_date"], "2026-09-12")
         self.assertEqual(data["weather"]["end_date"], "2026-09-14")
         self.assertEqual(data["preferences"]["selection_count"], 0)
+        self.assertTrue(any("本機 parser" in warning for warning in data["warnings"]))
         original = self.client.get("/api/trip").json()["items"]
         for plan in data["plans"]:
             self.assertEqual([x for x in plan["items"] if x["booking"]],
                              [x for x in original if x["booking"]])
+
+    def test_replan_uses_configured_structured_event_parser(self):
+        completion = AsyncMock(return_value=json.dumps({
+            "event_type": "weather",
+            "delay_minutes": 0,
+            "affected_item_ids": ["item-9"],
+            "affected_dates": ["2026-09-14"],
+            "summary": "ignored provider summary",
+        }))
+        with patch.dict(os.environ, {
+            "LLM_API_KEY": "test-key", "LLM_MODEL": "test-model",
+        }), patch("backend.agent.parser.structured_completion", completion):
+            response = self.client.post("/api/replan", json={
+                "message": "後天迪士尼會下雨",
+                "now": "2026-09-12T09:00:00+09:00",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["event"], {
+            "event_type": "weather",
+            "delay_minutes": 0,
+            "affected_item_ids": ["item-9"],
+            "affected_dates": ["2026-09-14"],
+            "summary": "後天迪士尼會下雨",
+        })
+        self.assertFalse(any(
+            "本機 parser" in warning for warning in response.json()["warnings"]
+        ))
+        completion.assert_awaited_once()
+
+    def test_replan_marks_event_provider_fallback(self):
+        with patch.dict(os.environ, {
+            "LLM_API_KEY": "test-key", "LLM_MODEL": "test-model",
+        }), patch(
+            "backend.agent.parser.structured_completion",
+            AsyncMock(side_effect=LLMProviderError("provider-secret-detail")),
+        ):
+            response = self.client.post("/api/replan", json={
+                "message": "睡過頭兩小時",
+                "now": "2026-09-12T09:00:00+09:00",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(any(
+            "本機 parser" in warning for warning in response.json()["warnings"]
+        ))
+        self.assertNotIn("provider-secret-detail", response.text)
+
+    def test_replanner_unavailable_returns_sanitized_503(self):
+        app.dependency_overrides[get_replanner] = lambda: UnavailableReplanner()
+
+        response = self.client.post("/api/replan", json={
+            "message": "睡過頭兩小時",
+            "now": "2026-09-12T09:00:00+09:00",
+        })
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json(), {
+            "detail": "重排行程服務暫時無法使用，請稍後重試。",
+        })
+        self.assertNotIn("provider-secret-detail", response.text)
+        self.assertEqual(self.store.load_state().replan_snapshots, {})
 
     def test_invalid_request(self):
         for payload in ({"message": ""}, {"message": "   "},
@@ -181,7 +296,7 @@ class ApiTest(unittest.TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(self.store.path.read_bytes(), contents)
 
-    def test_selection_contract_is_exposed_but_not_implemented(self):
+    def test_unknown_selection_returns_404(self):
         invalid = self.client.post(
             "/api/selections", json={"replan_id": "x", "plan_id": "A"},
         )
@@ -195,5 +310,79 @@ class ApiTest(unittest.TestCase):
         response = self.client.post(
             "/api/selections", json={"replan_id": str(uuid4()), "plan_id": "A"},
         )
-        self.assertEqual(response.status_code, 501)
-        self.assertIn("尚未實作", response.json()["detail"])
+        self.assertEqual(response.status_code, 404)
+        self.assertIn("snapshot", response.json()["detail"])
+
+    def test_ready_replan_can_be_selected_once_and_retried_idempotently(self):
+        replanner = ReadyReplanner()
+        app.dependency_overrides[get_replanner] = lambda: replanner
+        response = self.client.post("/api/replan", json={
+            "message": "後天迪士尼會下大雨",
+            "now": "2026-09-12T09:00:00+09:00",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["status"], "ready")
+        self.assertEqual(data["planning_source"], "fixture")
+        self.assertEqual(data["recommended_plan_id"], "A")
+        self.assertIn("B fixture", data["warnings"])
+        self.assertEqual(replanner.context.event.affected_item_ids, ["item-9"])
+        self.assertIn(data["replan_id"], self.store.load_state().replan_snapshots)
+
+        request = {"replan_id": data["replan_id"], "plan_id": "A"}
+        selected = self.client.post("/api/selections", json=request)
+        retried = self.client.post("/api/selections", json=request)
+
+        self.assertEqual(selected.status_code, 200)
+        self.assertEqual(retried.json(), selected.json())
+        self.assertEqual(selected.json()["trip"]["version"], 2)
+        self.assertEqual(selected.json()["preferences"]["selection_count"], 1)
+        self.assertEqual(selected.json()["preferences"]["weights"]["preserve_booking"], 2)
+        self.assertEqual(self.store.get_trip().version, 2)
+        self.assertEqual(self.store.get_preferences().selection_count, 1)
+
+        changed = self.client.post("/api/selections", json={
+            "replan_id": data["replan_id"],
+            "plan_id": "B",
+        })
+        self.assertEqual(changed.status_code, 409)
+        self.assertEqual(self.store.get_preferences().selection_count, 1)
+
+    def test_stale_replan_cannot_be_selected(self):
+        app.dependency_overrides[get_replanner] = lambda: ReadyReplanner()
+        response = self.client.post("/api/replan", json={
+            "message": "睡過頭兩小時",
+            "now": "2026-09-12T09:00:00+09:00",
+        })
+        replan_id = response.json()["replan_id"]
+        trip = self.store.get_trip()
+        trip.version += 1
+        self.store.save_trip(trip)
+
+        selected = self.client.post("/api/selections", json={
+            "replan_id": replan_id,
+            "plan_id": "A",
+        })
+
+        self.assertEqual(selected.status_code, 409)
+        self.assertIn("版本", selected.json()["detail"])
+
+    def test_infeasible_plan_cannot_be_selected(self):
+        app.dependency_overrides[get_replanner] = lambda: InfeasibleReplanner()
+        response = self.client.post("/api/replan", json={
+            "message": "後天迪士尼會下大雨",
+            "now": "2026-09-12T09:00:00+09:00",
+        })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["status"], "ready")
+        self.assertIsNone(response.json()["recommended_plan_id"])
+        selected = self.client.post("/api/selections", json={
+            "replan_id": response.json()["replan_id"],
+            "plan_id": "A",
+        })
+
+        self.assertEqual(selected.status_code, 409)
+        self.assertIn("不可行", selected.json()["detail"])
+        self.assertEqual(self.store.get_trip().version, 1)
