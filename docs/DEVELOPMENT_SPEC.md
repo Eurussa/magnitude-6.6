@@ -23,7 +23,7 @@ Out of Scope：Next.js/SSR、LangGraph、CrewAI、Leaflet/OSM、Google Maps SDK�
 - 單一 FastAPI server，`agent/` 與 `replanner/` 是 Python module，不是兩個服務。
 - 使用 runtime JSON，不使用 DB。`data/trip.json` 與 `preferences.json` 是唯讀種子；首次讀取初始化 `data/runtime/state.json`（schema_version=2、multi-day trip、preferences），後續由 A 讀寫，不提交 runtime。Version 1 不自動猜測日期或靜默遷移。
 - RuntimeStore 以單程序鎖保護更新，暫存檔寫入並 fsync 後以原子 replace 取代狀態；限單一 worker。損壞或無法讀寫時明確報錯，不靜默覆蓋已保存資料。
-- LLM：透過 httpx 呼叫支援 JSON Schema structured output 的 provider；A 用於事件解析與推薦說明，B 用於產生 A/B/C 重排行程。共用 provider/model 設定由 A 整合，planning prompt 與規劃呼叫由 B 負責；金鑰只在後端。
+- LLM：透過 httpx 呼叫支援 JSON Schema structured output 的 provider；A 用於事件解析與推薦說明，B 用於產生 A/B/C 重排行程。B 的 planning prompt 與 Responses API adapter 位於 `backend/replanner/`，A/B 共用 repository-root `.env` 的 `LLM_` 設定；金鑰不進前端或 commit。
 - 天氣：Open-Meteo hourly precipitation_probability；取得 Trip 尚未結束的日期區間，以 Asia/Tokyo 對齊時間，失敗時顯示 fixture/fallback 標籤，不冒充即時資料。
 - Google Maps Search URL 以座標開啟地點，交通時間使用 fixture，不宣稱是即時導航。
 
@@ -38,12 +38,12 @@ React SPA :5173 -- /api proxy --> FastAPI :8000
                                   └-- agent/explanation.py + Pydantic → JSON response
 ```
 
-事件 LLM 輸出須經 `Event.model_validate_json`，planning LLM 輸出須經對應的 Pydantic schema 與方案限制驗證；timeout、格式錯誤或無效方案應重試、使用明確標示的 fixture/fallback，或回傳 503。LLM 負責產生跨日重排行程，Python 負責 orchestration、驗證及 deterministic preference scoring。預設 `WEATHER_MODE=mock` 使用涵蓋 demo 三日的天氣 fixture；`live` 呼叫 Open-Meteo date range，失敗時明示 fallback。`agent/weather.py` 已串入多日 context，但 placeholder planner 尚未呼叫 planning LLM。
+事件 LLM 輸出須經 `Event.model_validate_json`，planning LLM 輸出須經對應的 Pydantic schema 與方案限制驗證；timeout、格式錯誤或無效方案應重試、使用明確標示的 fixture/fallback，或回傳 503。LLM 負責產生跨日重排行程，Python 負責 orchestration、驗證及 deterministic preference scoring。預設 `WEATHER_MODE=mock` 使用涵蓋 demo 三日的天氣 fixture；`live` 呼叫 Open-Meteo date range，失敗時明示 fallback。`agent/weather.py` 已串入多日 context，B 的 `LLMReplanner` 亦已完成，但 `main.py` 仍使用舊 placeholder function，待 A 改接 async Protocol。
 
 ## 目前交付範圍
-已實作：`GET /api/health`、`GET /api/trip`、`GET /api/preferences`、`POST /api/replan`、完整外層 Pydantic/OpenAPI schema、`POST /api/selections` 路由契約、多日 JSON fixture、runtime JSON 行程／偏好讀寫、多日天氣 context、前端既有串接、Google Maps link 與相關後端測試。RuntimeStore 提供內部保存介面，本次不開放 HTTP 任意儲存或重置 endpoint。Frontend types 與按日期分組的 UI 由 frontend owner 依新契約另行同步，本次不修改 `frontend/`。
+已實作：`GET /api/health`、`GET /api/trip`、`GET /api/preferences`、`POST /api/replan`、完整外層 Pydantic/OpenAPI schema、`POST /api/selections` 路由契約、多日 JSON fixture、runtime JSON 行程／偏好讀寫、多日天氣 context、Backend B 的 planning LLM／structured output／限制驗證／impact/features／排序／重試／fallback、前端既有串接、Google Maps link 與相關後端測試。RuntimeStore 提供內部保存介面，本次不開放 HTTP 任意儲存或重置 endpoint。Frontend types 與按日期分組的 UI 由 frontend owner 依新契約另行同步，本次不修改 `frontend/`。
 
-Replan 固定回傳 `status: placeholder`，三方案沿用完整多日行程；事件類型為 unknown。Selections 路由已存在但固定回 501。**尚未實作真正 LLM 事件解析、LLM 跨日行程重排、天氣影響方案、snapshot、方案套用或偏好學習。** 外層契約已固定，未實作狀態不代表欄位仍待決定。
+Replan HTTP route 仍固定回傳 `status: placeholder`，三方案沿用完整多日行程；事件類型為 unknown。Selections 路由已存在但固定回 501。**B 的跨日重排模組已完成；尚未實作真正 LLM 事件解析、A 對 B 的 route 注入、snapshot、方案套用或偏好學習。** 外層契約已固定，未實作狀態不代表欄位仍待決定。
 
 ## API contract
 完整且固定的欄位、enum、nullable 規則、錯誤碼、選擇交易語意及 A/B module 介面見 [Backend API 與模組契約](api-contract.md)。即時可執行 schema 以 `/openapi.json`、互動文件 `/docs` 為準。
@@ -95,7 +95,7 @@ trip_id 目前僅接受 tokyo-demo；message 1–2000 字、不可全空白。�
 | Selection | request 僅 replan_id/plan_id；record 加 created_at；response 回 selection、更新後 Trip 與 Preference |
 | ReplanSnapshot | replan_id, trip_id, trip_version, planning_source, plans, recommended_plan_id, created_at；拒絕套用已過期版本 |
 
-固定 A/B 介面為 `await Replanner.generate_plans(context: ReplanContext) -> PlanningResult`，Protocol 位於 `backend/contracts.py`。`parse_event(message, *, trip, now) -> Event` 與舊 `candidate_plans(...)` 仍是 placeholder；完成整合時 A 的 main 呼叫上述 async 介面。A 組裝 context、取得天氣、保存 snapshot、補 explanation/insight 並組 response；B 擁有 planning prompt／LLM 呼叫、結構化 Plan、驗證、impact/features 與 deterministic 排序。B 不呼叫 Open-Meteo、不直接讀寫 JSON，也不依賴 `agent/`。
+固定 A/B 介面為 `await Replanner.generate_plans(context: ReplanContext) -> PlanningResult`，Protocol 位於 `backend/contracts.py`，B 的 `LLMReplanner` 已實作此介面。`parse_event(message, *, trip, now) -> Event` 與舊 `candidate_plans(...)` 仍是 placeholder；完成整合時 A 的 main 呼叫上述 async 介面。A 組裝 context、取得天氣、保存 snapshot、補 explanation/insight 並組 response；B 擁有 planning prompt／LLM 呼叫、結構化 Plan、驗證、impact/features 與 deterministic 排序。B 不呼叫 Open-Meteo、不直接讀寫 runtime，也不依賴 `agent/`。
 
 A 的 RuntimeStore 提供 `get_trip()`、`get_preferences()`、`save_trip()`、`save_preferences()`、`save_state(trip, preferences)`，保留種子並集中管理 runtime 寫入。此次不保存候選 snapshot 或選擇紀錄；後續實作 `/api/selections` 時依既定 `ReplanSnapshot`／Selection schema 擴充 runtime state。
 
@@ -110,7 +110,7 @@ A 的 RuntimeStore 提供 `get_trip()`、`get_preferences()`、`save_trip()`、`
 | Backend A | agent/（parser / prompts、context、weather、preference / runtime、explanation）、main.py、models.py；偏好種子、天氣 fixture、runtime JSON；後續 snapshot / selection 交易 | structured output 驗證、Open-Meteo / fallback、時間對齊、JSON 持久化、推薦解釋、選擇冪等；維護 API 契約 |
 | Backend B | replanner/ 的 planning prompt、LLM 呼叫、multi-day candidate structured output、方案驗證、scoring / impact；data/ 中多日行程、候選、交通、營業時間與 planning fallback fixture | LLM 產生三種不同跨日方案、輸出可驗證、整日換日與受影響日期可重排、限制與多日天氣納入規劃、代價與方案特徵可檢查、偏好排序穩定 |
 
-README / 共用 schema 與共用 LLM provider 設定由 A 整合；要改欄位先通知三人，先更新本文件與 Pydantic，再由 Frontend 更新 TS。B 不直接修改 agent/；A 不改 B 的 planning prompt、驗證或 scoring，雙方使用約定函式／client 介面。`data/` 依內容分工，不整包交給 B。A 取得與整理天氣，B 將天氣納入 LLM 重排；B 回傳已驗證的 plans、impact / features、排序與 `recommended_plan_id`，A 產生使用者可讀解釋。raw score 僅供 B 內部排序，不加入 API response。
+README / 共用 schema 與 Agent LLM 設定由 A 整合；A/B 共用 root `LLM_` provider 設定，B 維護 planning adapter。要改欄位先通知三人，先更新本文件與 Pydantic，再由 Frontend 更新 TS。B 不直接修改 agent/；A 不改 B 的 planning prompt、驗證或 scoring，雙方使用約定函式／client 介面。`data/` 依內容分工，不整包交給 B。A 取得與整理天氣，B 將天氣納入 LLM 重排；B 回傳已驗證的 plans、impact / features、排序與 `recommended_plan_id`，A 產生使用者可讀解釋。raw score 僅供 B 內部排序，不加入 API response。
 
 ## Git workflow
 以遠端 main 為整合分支。三人由最新 main 建 `feat/frontend`、`feat/agent`、`feat/replanner`；每 30–45 分鐘提交可執行的小變更，經一位同伴檢查後合併。不要 force-push main；不要提交 .env、node_modules、.venv 或 runtime 資料。共用檔衝突由 owner 處理，禁止以整檔覆蓋解決。
@@ -133,4 +133,4 @@ README / 共用 schema 與共用 LLM provider 設定由 A 整合；要改欄位�
 
 第一幕：第一天 09:00 睡過頭兩小時，取消或調整未預約景點以保留午餐與 teamLab，A/B/C 展示不同取捨。選 A，記住偏好。第二幕：接近 9/14 時發現迪士尼當日高機率降雨；planning LLM 可把迪士尼整日移至較乾燥的 9/13，並將原本 9/13 的行程重新分配到其他可用日期。呈現跨日變更、偏好原因與 Google Maps。
 
-必測：空字串 422、未知行程 422、事件／planning LLM 非法 JSON、planning LLM timeout、天氣 timeout、鎖定時間不變、不可行不可套用、相同輸入的偏好排序穩定、重複選擇不重複計分、再次啟動偏好仍存在。目前測試涵蓋 API 契約、runtime JSON 及天氣 context，placeholder 不改動預約資料；LLM 事件解析、LLM 行程重排、選擇與學習迴圈仍為後續開發驗收目標。
+必測：空字串 422、未知行程 422、事件／planning LLM 非法 JSON、planning LLM timeout、天氣 timeout、鎖定時間不變、不可行不可套用、相同輸入的偏好排序穩定、重複選擇不重複計分、再次啟動偏好仍存在。目前測試涵蓋 API 契約、runtime JSON、天氣 context，以及 B 的 provider payload、structured output、重試、fallback、跨日交換、鎖定限制、changes 與偏好排序；LLM 事件解析、main/snapshot/selection 與學習迴圈仍為後續開發驗收目標。

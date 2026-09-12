@@ -14,7 +14,7 @@ Accepted — 2026-09-12
 
 ## Decision
 
-- Backend A 組裝已驗證的 `ReplanContext`，包含 `Trip`、`Event`、`WeatherContext`、`Preference` 與 `now`，並呼叫固定的 `await Replanner.generate_plans(context) -> PlanningResult` Protocol。A 繼續負責事件解析、天氣取得、runtime、使用者可讀推薦說明，以及共用 LLM provider/model/key 設定的整合。
+- Backend A 組裝已驗證的 `ReplanContext`，包含 `Trip`、`Event`、`WeatherContext`、`Preference` 與 `now`，並呼叫固定的 `await Replanner.generate_plans(context) -> PlanningResult` Protocol。A 繼續負責事件解析、天氣取得、runtime 與使用者可讀推薦說明；A/B 的 provider/model/key 共用 repository-root `.env` 的 `LLM_` 設定，由 A 在 application boundary 建立並注入 replanner。
 - Backend B 擁有 replanner 的 planning prompt、LLM 呼叫與 planning structured-output schema。B 將完整 multi-day context 提供給 planning LLM，要求產生 A 保留預約、B 保留最多景點、C 最輕鬆三個候選方案；事件可影響多個日期，方案可整日換日並重排其他受影響日期。
 - Python 不以 heuristic 產生或決定候選行程。B 使用 Python 進行 orchestration、Pydantic 驗證、日期範圍、項目參照與重複檢查，以及同日時間、跨日移動、預約、交通／營業 fixture 等必要限制驗證；無效輸出不得直接標示為 ready。
 - planning LLM timeout、無效 JSON 或不符合限制時，B 應採有限次重試、明確標示的 planning fixture/fallback，或回傳可恢復的 provider error。測試不得呼叫真實 LLM。
@@ -27,4 +27,4 @@ Accepted — 2026-09-12
 
 行程重排能展示真正的生成式 AI 規劃能力，B 也能獨立調整 prompt、structured output 與重試策略。偏好排序維持 deterministic，可讓 Demo 的第二次推薦穩定反映先前選擇，而不必向前端暴露難以解釋的 raw score。
 
-此設計增加 LLM latency、成本與非決定性，也需要 provider mock、planning fixture、schema 驗證與錯誤恢復測試。A/B 必須共同確認共用 LLM client/config、planning output model 與 API 整合；在這些功能完成前，現有 `candidate_plans` 仍是 placeholder，不得宣稱已完成 LLM 重排。
+此設計增加 LLM latency、成本與非決定性，也需要 provider mock、planning fixture、schema 驗證與錯誤恢復測試。B 已實作 OpenAI Responses API adapter、共用 root LLM config、planning output model、限制驗證、重試、fixture 與 deterministic ranking；現有 `candidate_plans` 只為尚未改接的 `main.py` 保留 placeholder。A 仍須透過既定 Protocol 串接、保存 snapshot 並處理外層錯誤，不能把 B 模組完成等同整條 HTTP 流程完成。

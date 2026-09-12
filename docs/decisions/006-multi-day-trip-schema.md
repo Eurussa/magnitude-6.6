@@ -27,4 +27,4 @@ Accepted — 2026-09-12
 
 Replanner 能收到並回傳完整多日行程，事件與天氣也能明確指出受影響日期；迪士尼整日換日與交換日大幅重排可由相同 schema 表達。扁平 items 讓現有 runtime 與 Plan 結構保持簡單，但呼叫端若要顯示日程，必須自行依 scheduled_date 排序與分組。
 
-這是 breaking API/schema change。現有 frontend types 仍是單日版本，需由 frontend owner 更新後才會正確顯示日期；舊 runtime version 1 也不能直接載入。Planning LLM 尚未實作，目前 placeholder 只會複製完整多日 Trip，不代表已完成跨日重排。
+這是 breaking API/schema change。現有 frontend types 仍是單日版本，需由 frontend owner 更新後才會正確顯示日期；舊 runtime version 1 也不能直接載入。B 的 Planning LLM 已能產生與驗證跨日方案，但目前 `main.py` placeholder 仍只會複製完整多日 Trip，須待 A 改接 async Protocol 才能由 HTTP 使用。

@@ -1,0 +1,12 @@
+{
+  "default_minutes": 20,
+  "routes": [
+    {"from_item_id": "item-1", "to_item_id": "item-2", "minutes": 15},
+    {"from_item_id": "item-2", "to_item_id": "item-3", "minutes": 10},
+    {"from_item_id": "item-3", "to_item_id": "item-4", "minutes": 25},
+    {"from_item_id": "item-4", "to_item_id": "item-5", "minutes": 25},
+    {"from_item_id": "item-6", "to_item_id": "item-7", "minutes": 10},
+    {"from_item_id": "item-7", "to_item_id": "item-8", "minutes": 10},
+    {"from_item_id": "item-8", "to_item_id": "candidate-mori-art", "minutes": 15}
+  ]
+}
