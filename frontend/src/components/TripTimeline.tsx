@@ -2,21 +2,24 @@ import type { TripItem } from '../api/client'
 import { formatDuration, isCurrentItem, isPastItem, type TripClock } from '../utils/tripTime'
 import { MapIcon } from './Icons'
 
-interface TripTimelineProps { items: TripItem[]; clock: TripClock; nextItemId?: string; showMaps?: boolean }
+interface TripTimelineProps { items: TripItem[]; clock: TripClock; emphasizeNext?: boolean; nextItemId?: string; showMaps?: boolean }
 
-export function TripTimeline({ items, clock, nextItemId, showMaps = true }: TripTimelineProps) {
+export function TripTimeline({ items, clock, emphasizeNext = false, nextItemId, showMaps = true }: TripTimelineProps) {
   return (
     <ol>
       {items.map((item, index) => {
         const isCurrent = isCurrentItem(item, clock)
         const isNext = item.id === nextItemId
+        const isEmphasizedNext = isNext && emphasizeNext
         const isPast = isPastItem(item, clock)
         return (
           <li className={`grid grid-cols-[54px_18px_minmax(0,1fr)] gap-2 rounded-2xl px-2 pt-3 ${isCurrent ? 'bg-[#fff1df]' : ''}`} key={item.id}>
             <time className={`pt-0.5 font-semibold tabular-nums ${isPast ? 'text-[#93a1ae]' : 'text-[#173b57]'}`}>{item.start_time}</time>
             <span className="relative flex justify-center" aria-hidden="true">
-              {(isCurrent || isNext) && <span className="absolute top-0.5 size-5 rounded-full border border-[#f47c57]/60 motion-safe:[animation:timeline-ring-pulse_1.6s_ease-in-out_infinite]" />}
-              <span className={`relative z-10 mt-1.5 size-3 rounded-full border-2 ${isCurrent ? 'border-[#f47c57] bg-[#f47c57]' : isNext ? 'border-[#f47c57] bg-white' : 'border-[#168b86] bg-white'}`} />
+              {(isCurrent || isEmphasizedNext) && (
+                <span className="absolute top-0.5 size-5 rounded-full border border-[#f47c57]/60 motion-safe:[animation:timeline-ring-pulse_1.6s_ease-in-out_infinite]" />
+              )}
+              <span className={`relative z-10 mt-1.5 size-3 rounded-full border-2 ${isCurrent ? 'border-[#f47c57] bg-[#f47c57]' : isEmphasizedNext ? 'border-[#f47c57] bg-white' : 'border-[#168b86] bg-white'}`} />
               {index < items.length - 1 && <span className="absolute bottom-0 top-4 w-px bg-[#cbd8e5]" />}
             </span>
             <div className="min-w-0 pb-6">

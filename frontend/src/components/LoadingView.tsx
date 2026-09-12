@@ -24,7 +24,8 @@ export function LoadingView({ message }: LoadingViewProps) {
         <img alt="" className="h-24 w-full object-cover" src="/assets/tokyo-journey-banner.png" />
         <div className="p-4">
           <p className="text-xs font-bold tracking-wide text-[#168b86]">等待時閱讀</p>
-          <p className="mt-1 text-sm leading-6 text-[#29445e]">{TOKYO_WAITING_TIP}</p>
+          <h2 className="mt-2 text-base font-bold text-[#173b57]">{TOKYO_WAITING_TIP.title}</h2>
+          <p className="mt-1 text-sm leading-6 text-[#29445e]">{TOKYO_WAITING_TIP.body}</p>
         </div>
       </aside>
     </main>

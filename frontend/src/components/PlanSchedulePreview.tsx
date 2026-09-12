@@ -21,8 +21,8 @@ export function PlanSchedulePreview({ items, timezone }: PlanSchedulePreviewProp
   return (
     <div className="mt-3 space-y-3">
       {days.map((day) => (
-        <section className="overflow-hidden rounded-2xl border border-[#d7e2ea] bg-white" key={day.date}>
-          <div className="flex min-h-12 items-center justify-between gap-3 bg-[#e8f2f5] px-4">
+        <section className="overflow-hidden rounded-2xl border border-[#afd3cf] bg-white shadow-[0_3px_10px_rgba(16,35,74,0.05)]" key={day.date}>
+          <div className="flex min-h-12 items-center justify-between gap-3 bg-[#dff2ef] px-4">
             <h3 className="font-bold text-[#173b57]">{formatTripDate(day.date, clock.date)}</h3>
             <span className="text-xs font-semibold text-[#5d7187]">{day.items.length} 個活動</span>
           </div>

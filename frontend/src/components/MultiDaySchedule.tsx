@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import type { TripItem } from '../api/client'
-import { formatTripDate, getTripClock, groupTripItems, isNextItem, isPastItem } from '../utils/tripTime'
+import { formatTripDate, getTripClock, groupTripItems, isCurrentItem, isNextItem, isPastItem } from '../utils/tripTime'
 import { ChevronDownIcon } from './Icons'
 import { TripTimeline } from './TripTimeline'
 
@@ -45,6 +45,7 @@ function ScheduleAccordion({ children, countLabel, title, variant = 'outlined' }
 export function MultiDaySchedule({ items, timezone, showMaps = true }: MultiDayScheduleProps) {
   const clock = getTripClock(timezone)
   const days = groupTripItems(items)
+  const hasCurrentItem = items.some((item) => isCurrentItem(item, clock))
   const nextItemId = items
     .filter((item) => isNextItem(item, clock))
     .sort((a, b) => `${a.scheduled_date}T${a.start_time}`.localeCompare(`${b.scheduled_date}T${b.start_time}`))[0]?.id
@@ -71,14 +72,14 @@ export function MultiDaySchedule({ items, timezone, showMaps = true }: MultiDayS
                   <TripTimeline clock={clock} items={earlierItems} showMaps={showMaps} />
                 </ScheduleAccordion>
               )}
-              <TripTimeline clock={clock} items={activeAndLaterItems} nextItemId={nextItemId} showMaps={showMaps} />
+              <TripTimeline clock={clock} emphasizeNext={!hasCurrentItem} items={activeAndLaterItems} nextItemId={nextItemId} showMaps={showMaps} />
             </section>
           )
         }
 
         return (
           <ScheduleAccordion countLabel={`${day.items.length} 個活動`} key={day.date} title={formatTripDate(day.date, clock.date)}>
-            <TripTimeline clock={clock} items={day.items} nextItemId={nextItemId} showMaps={showMaps} />
+            <TripTimeline clock={clock} emphasizeNext={!hasCurrentItem} items={day.items} nextItemId={nextItemId} showMaps={showMaps} />
           </ScheduleAccordion>
         )
       })}

@@ -33,8 +33,8 @@ export function PlanCard({ plan, canApply, isApplying, isRecommended, onApply, t
       <p className="mt-4 break-words leading-7 text-[#29445e]">{plan.explanation}</p>
 
       {expanded && (
-        <div className="mt-4 rounded-2xl border border-[#bcd5dc] bg-[#e8f2f5] p-3" id={scheduleId}>
-          <p className="px-1 text-sm font-bold text-[#173b57]">方案中的行程</p>
+        <div className="mt-4 rounded-2xl border border-[#efc49f] bg-[#fff4e8] p-3" id={scheduleId}>
+          <p className="px-1 text-sm font-bold text-[#7d4527]">方案中的行程</p>
           <PlanSchedulePreview items={plan.items} timezone={timezone} />
         </div>
       )}
