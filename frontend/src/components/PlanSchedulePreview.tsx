@@ -1,5 +1,5 @@
 import type { TripItem } from '../api/client'
-import { formatTripDate, getTripClock, groupTripItems, isCurrentItem, isNextItem, isPastItem } from '../utils/tripTime'
+import { formatDuration, formatTripDate, getTripClock, groupTripItems, isCurrentItem, isNextItem, isPastItem } from '../utils/tripTime'
 
 interface PlanSchedulePreviewProps {
   items: TripItem[]
@@ -40,7 +40,7 @@ export function PlanSchedulePreview({ items, timezone }: PlanSchedulePreviewProp
                       {isNext && <span className="rounded-full bg-[#dff2ef] px-2 py-0.5 text-xs font-bold text-[#117570]">接下來</span>}
                     </div>
                     <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#62778a]">
-                      <span>{item.duration_minutes} 分鐘</span>
+                      <span>{formatDuration(item.duration_minutes)}</span>
                       <span>{item.indoor ? '室內' : '戶外'}</span>
                       {item.booking ? <span>已預約</span> : !item.movable && <span>行程固定</span>}
                     </div>

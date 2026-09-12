@@ -1,11 +1,45 @@
+import { useId, useState, type ReactNode } from 'react'
 import type { TripItem } from '../api/client'
 import { formatTripDate, getTripClock, groupTripItems, isNextItem, isPastItem } from '../utils/tripTime'
+import { ChevronDownIcon } from './Icons'
 import { TripTimeline } from './TripTimeline'
 
 interface MultiDayScheduleProps {
   items: TripItem[]
   timezone: string
   showMaps?: boolean
+}
+
+interface ScheduleAccordionProps {
+  children: ReactNode
+  countLabel: string
+  title: string
+  variant?: 'subtle' | 'outlined'
+}
+
+function ScheduleAccordion({ children, countLabel, title, variant = 'outlined' }: ScheduleAccordionProps) {
+  const [expanded, setExpanded] = useState(false)
+  const contentId = useId()
+  const isSubtle = variant === 'subtle'
+
+  return (
+    <section className={isSubtle ? 'mb-2 rounded-2xl bg-[#f5f8fa]' : 'rounded-2xl border border-[#d7e2ea] bg-white'}>
+      <button
+        aria-controls={contentId}
+        aria-expanded={expanded}
+        className={`flex w-full cursor-pointer items-center justify-between gap-3 rounded-2xl text-left focus-visible:outline-none ${isSubtle ? 'min-h-12 px-3 text-sm font-semibold text-[#5d7187]' : 'min-h-14 px-4 font-bold text-[#173b57]'}`}
+        onClick={() => setExpanded((value) => !value)}
+        type="button"
+      >
+        <span>{title}</span>
+        <span className="flex items-center gap-2 text-xs font-semibold text-[#5d7187]">
+          {countLabel}
+          <ChevronDownIcon className={`size-5 shrink-0 transition-transform motion-reduce:transition-none ${expanded ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+      {expanded && <div className="border-t border-[#e2eaf0] px-2 pt-1" id={contentId}>{children}</div>}
+    </section>
+  )
 }
 
 export function MultiDaySchedule({ items, timezone, showMaps = true }: MultiDayScheduleProps) {
@@ -33,18 +67,9 @@ export function MultiDaySchedule({ items, timezone, showMaps = true }: MultiDayS
                 <span className="text-xs font-semibold text-[#5d7187]">{day.items.length} 個活動</span>
               </div>
               {earlierItems.length > 0 && (
-                <details className="group mb-2 rounded-2xl bg-[#f5f8fa]">
-                  <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-3 text-sm font-semibold text-[#5d7187] focus-visible:outline-none">
-                    <span>較早行程</span>
-                    <span className="flex items-center gap-2">
-                      {earlierItems.length} 筆
-                      <span aria-hidden="true" className="text-base transition group-open:rotate-180">⌄</span>
-                    </span>
-                  </summary>
-                  <div className="border-t border-[#e2eaf0] px-1 pt-1">
-                    <TripTimeline clock={clock} items={earlierItems} showMaps={showMaps} />
-                  </div>
-                </details>
+                <ScheduleAccordion countLabel={`${earlierItems.length} 筆`} title="較早行程" variant="subtle">
+                  <TripTimeline clock={clock} items={earlierItems} showMaps={showMaps} />
+                </ScheduleAccordion>
               )}
               <TripTimeline clock={clock} items={activeAndLaterItems} nextItemId={nextItemId} showMaps={showMaps} />
             </section>
@@ -52,18 +77,9 @@ export function MultiDaySchedule({ items, timezone, showMaps = true }: MultiDayS
         }
 
         return (
-          <details className="group rounded-2xl border border-[#d7e2ea] bg-white" key={day.date}>
-            <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-3 rounded-2xl px-4 font-bold text-[#173b57] focus-visible:outline-none">
-              <span>{formatTripDate(day.date, clock.date)}</span>
-              <span className="flex items-center gap-2 text-xs font-semibold text-[#5d7187]">
-                {day.items.length} 個活動
-                <span aria-hidden="true" className="text-lg transition group-open:rotate-180">⌄</span>
-              </span>
-            </summary>
-            <div className="border-t border-[#e2eaf0] px-2 pt-1">
-              <TripTimeline clock={clock} items={day.items} nextItemId={nextItemId} showMaps={showMaps} />
-            </div>
-          </details>
+          <ScheduleAccordion countLabel={`${day.items.length} 個活動`} key={day.date} title={formatTripDate(day.date, clock.date)}>
+            <TripTimeline clock={clock} items={day.items} nextItemId={nextItemId} showMaps={showMaps} />
+          </ScheduleAccordion>
         )
       })}
     </div>
