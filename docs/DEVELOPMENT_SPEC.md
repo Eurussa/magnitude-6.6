@@ -41,9 +41,9 @@ React SPA :5173 -- /api proxy --> FastAPI :8000
 事件 LLM 輸出須經 `Event.model_validate_json`，planning LLM 輸出須經對應的 Pydantic schema 與方案限制驗證；timeout、格式錯誤或無效方案應重試、使用明確標示的 fixture/fallback，或回傳 503。LLM 負責產生跨日重排行程，Python 負責 orchestration、驗證及 deterministic preference scoring。預設 `WEATHER_MODE=mock` 使用涵蓋 demo 三日的天氣 fixture；`live` 呼叫 Open-Meteo date range，失敗時明示 fallback。`agent/weather.py` 已串入多日 context，但 placeholder planner 尚未呼叫 planning LLM。
 
 ## 目前交付範圍
-已實作：`GET /api/health`、`GET /api/trip`、`GET /api/preferences`、`POST /api/replan`、完整外層 Pydantic/OpenAPI schema、`POST /api/selections` 路由契約、多日 JSON fixture、runtime JSON 行程／偏好讀寫、多日天氣 context、前端既有串接、Google Maps link 與相關後端測試。RuntimeStore 提供內部保存介面，本次不開放 HTTP 任意儲存或重置 endpoint。Frontend types 與按日期分組的 UI 由 frontend owner 依新契約另行同步，本次不修改 `frontend/`。
+已實作：`GET /api/health`、`GET /api/trip`、`GET /api/preferences`、`POST /api/replan`、完整外層 Pydantic/OpenAPI schema、`POST /api/selections` 路由契約、多日 JSON fixture、runtime JSON 行程／偏好讀寫、多日天氣 context、前端 multi-day types、按日期分組的 Trip／Plan UI、Google Maps link 與相關後端測試。RuntimeStore 提供內部保存介面，本次不開放 HTTP 任意儲存或重置 endpoint。
 
-Replan 固定回傳 `status: placeholder`，三方案沿用完整多日行程；事件類型為 unknown。Selections 路由已存在但固定回 501。**尚未實作真正 LLM 事件解析、LLM 跨日行程重排、天氣影響方案、snapshot、方案套用或偏好學習。** 外層契約已固定，未實作狀態不代表欄位仍待決定。
+Replan 固定回傳 `status: placeholder`，後端三方案沿用完整多日行程；事件類型為 unknown。前端以明確標示的固定 fixture 預覽方案差異，但不開放套用。Selections 路由已存在但固定回 501。**尚未實作真正 LLM 事件解析、LLM 跨日行程重排、天氣影響方案、snapshot、方案套用或偏好學習。** 外層契約已固定，未實作狀態不代表欄位仍待決定。
 
 ## API contract
 完整且固定的欄位、enum、nullable 規則、錯誤碼、選擇交易語意及 A/B module 介面見 [Backend API 與模組契約](api-contract.md)。即時可執行 schema 以 `/openapi.json`、互動文件 `/docs` 為準。

@@ -1,3 +1,70 @@
 @import "tailwindcss";
-body { margin: 0; background: #f3f7f6; color: #172b32; font-family: system-ui, sans-serif; }
-button, a { cursor: pointer; }
+
+:root {
+  font-family: Inter, ui-rounded, "SF Pro Rounded", "Noto Sans TC", system-ui, sans-serif;
+  color: #10234a;
+  background: #dcebf5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  overflow-x: hidden;
+  background: #dcebf5;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100dvh;
+  margin: 0;
+  overflow-x: hidden;
+  overflow-wrap: anywhere;
+  background: #dcebf5;
+}
+
+button,
+a,
+textarea {
+  font: inherit;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+a:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid rgb(22 139 134 / 35%);
+  outline-offset: 2px;
+}
+
+.app-shell {
+  width: 100%;
+  max-width: 414px;
+  min-height: 100dvh;
+  margin-inline: auto;
+  background: white;
+  box-shadow: 0 0 48px rgb(16 35 74 / 10%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
