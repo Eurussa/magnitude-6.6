@@ -1,8 +1,16 @@
-"""Parse user incidents locally into the shared multi-day Event contract."""
+"""Parse user incidents into the shared multi-day Event contract."""
+import json
+import logging
 import re
 from datetime import date, datetime, timedelta
 
+from pydantic import ValidationError
+
+from ..llm import LLMProviderError, llm_is_configured, structured_completion
 from ..models import Event, Trip
+from .prompts import SYSTEM_PROMPT
+
+logger = logging.getLogger(__name__)
 
 CHINESE_NUMBERS = {
     "零": 0,
@@ -69,8 +77,8 @@ def _mentioned_dates(message: str, trip: Trip, now: datetime) -> list[date]:
     return sorted(day for day in dates if trip.start_date <= day <= trip.end_date)
 
 
-def parse_event(message: str, *, trip: Trip, now: datetime) -> Event:
-    """Return a deterministic event without sending user data to a provider."""
+def parse_event_locally(message: str, *, trip: Trip, now: datetime) -> Event:
+    """Return the conservative deterministic fallback event."""
     delay_match = re.search(
         r"(?:睡過頭|晚(?:到|起)|延(?:遲|誤)|overslept|delay(?:ed)?)"
         r"[^\d零一二兩三四五六七八九十]*"
@@ -119,3 +127,64 @@ def parse_event(message: str, *, trip: Trip, now: datetime) -> Event:
         affected_dates=affected_dates,
         summary=message,
     )
+
+
+def _event_context(trip: Trip, now: datetime) -> dict[str, object]:
+    """Expose only fields needed to resolve item references and local dates."""
+    return {
+        "now": now.isoformat(),
+        "timezone": trip.timezone,
+        "trip_start_date": trip.start_date.isoformat(),
+        "trip_end_date": trip.end_date.isoformat(),
+        "items": [
+            {
+                "id": item.id,
+                "name": item.name,
+                "scheduled_date": item.scheduled_date.isoformat(),
+            }
+            for item in trip.items
+        ],
+    }
+
+
+def _validate_event_references(event: Event, trip: Trip, message: str) -> Event:
+    if event.event_type != "delay" and event.delay_minutes != 0:
+        raise ValueError("only delay events may include delay minutes")
+    known_item_ids = {item.id for item in trip.items}
+    if any(item_id not in known_item_ids for item_id in event.affected_item_ids):
+        raise ValueError("LLM event references an unknown trip item")
+    if any(
+        not trip.start_date <= affected_date <= trip.end_date
+        for affected_date in event.affected_dates
+    ):
+        raise ValueError("LLM event references a date outside the trip")
+    return event.model_copy(update={
+        "affected_item_ids": list(dict.fromkeys(event.affected_item_ids)),
+        "affected_dates": sorted(set(event.affected_dates)),
+        "summary": message,
+    })
+
+
+async def parse_event(message: str, *, trip: Trip, now: datetime) -> Event:
+    """Use structured output when configured, otherwise return the local fallback."""
+    fallback = parse_event_locally(message, trip=trip, now=now)
+    if not llm_is_configured():
+        return fallback
+    prompt = json.dumps(
+        {"message": message, "context": _event_context(trip, now)},
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    try:
+        content = await structured_completion(
+            schema_name="travel_event",
+            schema=Event.model_json_schema(),
+            system_prompt=SYSTEM_PROMPT,
+            user_prompt=prompt,
+        )
+        event = Event.model_validate_json(content)
+        return _validate_event_references(event, trip, message)
+    except (LLMProviderError, ValidationError, ValueError):
+        # Never log the prompt, response, headers, or API key.
+        logger.warning("LLM event parsing unavailable; using local fallback")
+        return fallback

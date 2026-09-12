@@ -13,7 +13,7 @@ async def build_context(request: ReplanRequest, store: RuntimeStore) -> ReplanCo
     state = store.load_state()
     timezone = ZoneInfo(state.trip.timezone)
     now = request.now.astimezone(timezone) if request.now else datetime.now(timezone)
-    event = parse_event(request.message, trip=state.trip, now=now)
+    event = await parse_event(request.message, trip=state.trip, now=now)
     weather = await get_weather(state.trip, now=now)
     return ReplanContext(trip=state.trip, event=event, weather=weather,
                          preferences=state.preferences, now=now)

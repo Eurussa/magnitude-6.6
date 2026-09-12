@@ -1,8 +1,9 @@
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -59,7 +60,11 @@ class ApiTest(unittest.TestCase):
         self.store = RuntimeStore(Path(self.temp.name))
         app.dependency_overrides[get_store] = lambda: self.store
         self.addCleanup(app.dependency_overrides.clear)
-        self.enterContext(patch.dict(os.environ, {"WEATHER_MODE": "mock"}))
+        self.enterContext(patch.dict(os.environ, {
+            "WEATHER_MODE": "mock",
+            "LLM_API_KEY": "",
+            "LLM_MODEL": "",
+        }))
         self.client = self.enterContext(TestClient(app))
 
     def test_health_and_trip(self):
@@ -171,6 +176,32 @@ class ApiTest(unittest.TestCase):
         for plan in data["plans"]:
             self.assertEqual([x for x in plan["items"] if x["booking"]],
                              [x for x in original if x["booking"]])
+
+    def test_replan_uses_configured_structured_event_parser(self):
+        completion = AsyncMock(return_value=json.dumps({
+            "event_type": "weather",
+            "delay_minutes": 0,
+            "affected_item_ids": ["item-9"],
+            "affected_dates": ["2026-09-14"],
+            "summary": "ignored provider summary",
+        }))
+        with patch.dict(os.environ, {
+            "LLM_API_KEY": "test-key", "LLM_MODEL": "test-model",
+        }), patch("backend.agent.parser.structured_completion", completion):
+            response = self.client.post("/api/replan", json={
+                "message": "後天迪士尼會下雨",
+                "now": "2026-09-12T09:00:00+09:00",
+            })
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["event"], {
+            "event_type": "weather",
+            "delay_minutes": 0,
+            "affected_item_ids": ["item-9"],
+            "affected_dates": ["2026-09-14"],
+            "summary": "後天迪士尼會下雨",
+        })
+        completion.assert_awaited_once()
 
     def test_invalid_request(self):
         for payload in ({"message": ""}, {"message": "   "},

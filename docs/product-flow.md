@@ -18,14 +18,14 @@
 
 1. 開啟 `/trip`，透過 `GET /api/trip` 載入 runtime 中的目前 multi-day `tokyo-demo`；`GET /api/preferences` 可讀取已保存偏好。首次讀取才由唯讀種子建立 schema version 2 的 `backend/data/runtime/state.json`。
 2. 輸入文字，呼叫 `POST /api/replan`；可選 `now` 必須帶 offset，未提供時取行程當地目前時間。
-3. Backend A 從同一份 runtime state 讀取多日行程與偏好，以本機 fallback parser 解析事件並取得涵蓋 Trip 未來日期區間的正規化天氣 context，再交給 Backend B 的 planner boundary。
+3. Backend A 從同一份 runtime state 讀取多日行程與偏好，以 LLM structured output 解析事件（無設定、provider 或驗證失敗時使用本機 fallback），並取得涵蓋 Trip 未來日期區間的正規化天氣 context，再交給 Backend B 的 planner boundary。
 4. 未注入 B 實例時，API 回傳 `status=placeholder`、null replan/recommendation、`planning_source=unavailable`；A/B/C 沿用完整多日行程、標示 `feasible=false`。注入符合 Protocol 的 B 實例後，A 保存 snapshot 並回 ready。
 5. 可透過 Google Maps Search URL 開啟地點。
 6. `POST /api/selections` 只接受 ready snapshot 的 `replan_id`／`plan_id`，在一次 runtime 原子更新中套用行程、將 Trip.version +1、保存選擇並更新偏好。
 
 天氣 adapter 已移至 A 的 `agent/weather.py` 並接入 context。預設 `WEATHER_MODE=mock` 使用具明確日期且涵蓋三日的 fixture；live 模式以 date range 呼叫 Open-Meteo，失敗時嘗試完整 fixture，仍不可用時標示 unavailable。API 以 `weather.source` 區分來源，並以 `start_date`／`end_date` 表示涵蓋區間；不把降雨機率當作大雨強度。
 
-Runtime JSON 會保存目前行程、偏好、snapshots 與冪等 selection responses，重啟後仍可讀取；沒有 HTTP 任意儲存或重置 endpoint。仍未接通外部 LLM 事件理解及 B 的 LLM 行程重排、天氣影響方案、可行性驗證與個人化排序，不能將 A 的 orchestration 與儲存完成視為完整 Demo。
+Runtime JSON 會保存目前行程、偏好、snapshots 與冪等 selection responses，重啟後仍可讀取；沒有 HTTP 任意儲存或重置 endpoint。A 的外部 LLM 事件理解與 fallback 已完成；仍未接通 B 的 LLM 行程重排、天氣影響方案、可行性驗證與個人化排序，不能將 A 的 orchestration 與儲存完成視為完整 Demo。
 
 ## 核心流程（Demo 目標，尚未完整實作）
 
@@ -72,11 +72,11 @@ Runtime JSON 會保存目前行程、偏好、snapshots 與冪等 selection resp
 - 選擇後可看到偏好原因與次數；相同選擇重送不重複計分，重啟後偏好仍存在。
 - 驗證空字串／未知行程 422、事件與 planning LLM 非法 JSON／timeout、天氣 timeout 與前端錯誤恢復。
 
-目前後端測試涵蓋 multi-day schema、API 契約、本機事件 fallback、runtime JSON、多日天氣、placeholder、ready snapshot、選擇冪等、不可行與 stale 拒絕；外部事件 LLM 及 B 的 planning LLM 跨日重排仍待完成驗收。
+目前後端測試涵蓋 multi-day schema、API 契約、事件 LLM strict schema request、非法輸出／provider failure、本機 fallback、runtime JSON、多日天氣、placeholder、ready snapshot、選擇冪等、不可行與 stale 拒絕；B 的 planning LLM 跨日重排仍待完成驗收。
 
 ## 待確認事項
 
 - 外層 API 與 A/B module schema 已固定；若新增 `weather_override` 或欄位，必須視為契約變更，由 A/B/Frontend 共同確認並先更新文件／Pydantic。
 - Backend B 補下午戶外候選、交通時間、營業時間、最晚抵達資料與 planning fallback，使雨天替代、LLM 輸出驗證與可行性可離線測試。
-- 共同確認 unknown 事件的後續互動、完成活動判定與外部事件 LLM adapter；selection 的 404/409/503 語意已固定。
+- 共同確認 unknown 事件的後續互動與完成活動判定；事件 LLM adapter 與 selection 的 404/409/503 語意已固定。
 - Frontend owner 需依外層契約同步 multi-day types，並按 scheduled_date 分組呈現 Trip／Plan；本次不修改 `frontend/`。
